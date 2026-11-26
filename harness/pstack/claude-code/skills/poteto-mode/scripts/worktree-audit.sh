@@ -4,8 +4,9 @@
 # operated in it. Emits a table sorted by size with a suggested bucket. Never
 # deletes anything; deletion stays a human-gated step in the playbook.
 #
-# Usage: worktree-audit.sh [-b|--base <ref>] [repo-path]
+# Usage: worktree-audit.sh [--history cursor|codex] [-b|--base <ref>] [repo-path]
 #   repo-path defaults to the current repo.
+#   --history selects Cursor transcripts (default) or scoped Codex thread metadata.
 #   -b sets the ref the MERGED column checks against (e.g. origin/integration).
 #   Without it the base is origin/HEAD, then origin/main, then origin/master.
 #   origin/HEAD is the remote's default branch, not necessarily the branch PRs
@@ -13,22 +14,33 @@
 set -u
 
 base=""
+history_source=cursor
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-b|--base) [ $# -ge 2 ] || { echo "error: $1 needs a ref" >&2; exit 2; }; base="$2"; shift 2 ;;
+	--history) [ $# -ge 2 ] || { echo "error: $1 needs cursor or codex" >&2; exit 2; }; history_source="$2"; shift 2 ;;
 	-h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
 	-*) echo "error: unknown option: $1" >&2; exit 2 ;;
 	*) break ;;
 	esac
 done
+case "$history_source" in
+	cursor|codex) ;;
+	*) echo "error: unknown history source: $history_source" >&2; exit 2 ;;
+esac
 
 repo="${1:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -z "$repo" ] && { echo "not in a git repo; pass a repo path" >&2; exit 1; }
 cd "$repo" || exit 1
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: not a git repo: $repo" >&2; exit 1; }
 
-# Main worktree is the first entry; everything else is a candidate.
-main_wt=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+# Main worktree is the first entry; retain full paths, including spaces.
+worktrees=()
+while IFS= read -r -d '' field; do
+	case "$field" in worktree\ *) worktrees+=("${field#worktree }");; esac
+done < <(git worktree list --porcelain -z)
+main_wt=${worktrees[0]:-}
+[ -n "$main_wt" ] || { echo "error: could not list worktrees" >&2; exit 1; }
 
 if [ -z "$base" ]; then
 	for cand in "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)" origin/main origin/master; do
@@ -47,14 +59,6 @@ origin/*) git fetch origin "+refs/heads/${base#origin/}:refs/remotes/$base" --qu
 esac
 git rev-parse --verify --quiet "$base^{commit}" >/dev/null 2>&1 || { echo "error: base ref not found: $base" >&2; exit 1; }
 
-# GNU coreutils (Linux, Homebrew gnubin) reads `stat -f` as file system status
-# and `date -r` as a file, so pick the stat and date flags once.
-if stat -c %Y / >/dev/null 2>&1; then
-	stat_fmt=(-c '%Y %n'); fmt_day() { date -d "@$1" '+%Y-%m-%d'; }
-else
-	stat_fmt=(-f '%m %N'); fmt_day() { date -r "$1" '+%Y-%m-%d'; }
-fi
-
 # PR state by branch, fetched once as [{number, state, head}] with a lowercase
 # state. Origin when its CLI can read this repo's PRs, otherwise gh. Empty when
 # neither can.
@@ -69,17 +73,34 @@ elif raw=$(gh pr list --author "@me" --state all --limit 1000 \
 fi
 [ -s "$prs" ] || echo "[]" > "$prs"
 
-# Transcripts dir: ~/.cursor/projects/<slugified-repo-path>/agent-transcripts.
-slug=$(printf '%s' "$main_wt" | sed 's#^/##; s#/#-#g')
-transcripts="$HOME/.cursor/projects/$slug/agent-transcripts"
+if stat -c %Y / >/dev/null 2>&1; then
+	stat_fmt=(-c '%Y'); fmt_day() { date -d "@$1" '+%Y-%m-%d'; }
+else
+	stat_fmt=(-f '%m'); fmt_day() { date -r "$1" '+%Y-%m-%d'; }
+fi
+
+case "$history_source" in
+	cursor)
+		slug=$(printf '%s' "$main_wt" | sed 's#^/##; s#/#-#g')
+		transcripts="$HOME/.cursor/projects/$slug/agent-transcripts"
+		;;
+	codex)
+		codex_history='{}'
+		if [ "${#worktrees[@]}" -gt 1 ]; then
+			script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+			if ! codex_history=$(node "$script_dir/codex-worktree-history.mjs" "${worktrees[@]:1}"); then
+				echo "warn: Codex history unavailable; unknown worktrees require review" >&2
+				codex_history='{}'
+			fi
+		fi
+		;;
+esac
 now=$(date +%s)
 
 echo "# base: $base"
 printf "SIZE\tAGE\tMERGED\tDIRTY\tREMOTE\tPR\tLAST_CHAT\tBUCKET\tWORKTREE\n"
 
-git worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r wt; do
-	[ "$wt" = "$main_wt" ] && continue
-
+for wt in "${worktrees[@]:1}"; do
 	size=$(du -sh "$wt" 2>/dev/null | awk '{print $1}')
 	head=$(git -C "$wt" rev-parse HEAD 2>/dev/null)
 	head_ts=$(git -C "$wt" log -1 --format='%ct' HEAD 2>/dev/null || echo 0)
@@ -108,20 +129,31 @@ git worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r wt;
 		'.[] | select(.head==$b) | "#\(.number)/\(.state)"' "$prs" 2>/dev/null | head -1)
 	[ -z "$pr" ] && pr="-"
 
-	# Most recent chat whose transcript operated in this worktree. Match path
-	# followed by "/" or a quote so glint-482 does not match glint-482-r37.
-	last="-"; last_ts=0
-	if [ -d "$transcripts" ]; then
-		f=$(rg -l -e "${wt}/" -e "${wt}\"" "$transcripts" 2>/dev/null \
-			| xargs stat "${stat_fmt[@]}" 2>/dev/null | sort -rn | head -1)
-		if [ -n "$f" ]; then last_ts=$(echo "$f" | awk '{print $1}')
-			last=$(fmt_day "$last_ts" 2>/dev/null); fi
-	fi
-	recent=$([ "$last_ts" -gt 0 ] 2>/dev/null && [ $(( (now - last_ts) / 86400 )) -le 4 ] && echo yes || echo no)
+	last_ts=0; pinned_or_active=false
+	case "$history_source" in
+		cursor)
+			if [ -d "$transcripts" ]; then
+				# Match the full path and its delimiter so sibling names cannot collide.
+				while IFS= read -r -d '' transcript; do
+					ts=$(stat "${stat_fmt[@]}" "$transcript" 2>/dev/null) || continue
+					[ "$ts" -gt "$last_ts" ] && last_ts=$ts
+				done < <(rg -l -0 -F -e "${wt}/" -e "${wt}\"" "$transcripts" 2>/dev/null)
+			fi
+			;;
+		codex)
+			IFS=$'\t' read -r last_ts pinned_or_active < <(
+				jq -r --arg wt "$wt" '.[$wt] | [.timestamp // 0, .hold // false] | @tsv' <<< "$codex_history"
+			)
+			;;
+	esac
+	last=unknown
+	if [ "${last_ts:-0}" -gt 0 ]; then last=$(fmt_day "$last_ts" 2>/dev/null) || last=unknown; fi
 
 	case "$dirty" in wip:*) bucket=hold-wip ;; *)
 		case "$pr" in */open|*/draft) bucket=hold-open-pr ;; *)
-			if [ "$recent" = yes ]; then bucket=verify-recent-chat
+			if [ "$pinned_or_active" = true ]; then bucket=verify-recent-chat
+			elif [ "$last" = unknown ]; then bucket=review-history-unknown
+			elif [ $(( (now - last_ts) / 86400 )) -le 4 ]; then bucket=verify-recent-chat
 			elif [ "$merged" = YES ] || [ "$pr" != "-" ]; then bucket=safe
 			else bucket=review; fi ;;
 		esac ;;

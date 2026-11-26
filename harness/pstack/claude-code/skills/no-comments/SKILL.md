@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 In Claude Code, read [the Claude Code adapter](../../docs/harness/claude-code.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Claude Code.
 
+In Codex, read [the Codex adapter](https://github.com/cursor/plugins/blob/main/pstack/docs/harness/codex.md) for dispatching the Comment Sicko role.
+
 Spawn Comment Sicko. Act on accepted findings.
 
 Defer to Comment Sicko's fresh perspective.

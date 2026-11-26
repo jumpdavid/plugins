@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # Swarm
 
+In Codex, read [the Codex adapter](../../docs/harness/codex.md) for phase tracking, worker dispatch, and the `swarm workers` role. For a direct invocation, use `update_plan` for the four phases below before framing the task or gathering evidence. Keep the phase names and order, and update their statuses at each phase boundary. Keep `Fan out` in progress until the workers have returned or any dropouts have been recorded. Mark `Report` complete after preparing the consolidated result and before sending the final reply. If this skill is part of an existing Codex plan, track it within that plan. Use the adapter's text fallback only when `update_plan` is unavailable.
+
 ## Start
 
 Open a todolist with one entry per phase before launching anything.

@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 In Claude Code, read [the Claude Code adapter](../../docs/harness/claude-code.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Claude Code.
 
+In Codex, read [the Codex adapter](https://github.com/cursor/plugins/blob/main/pstack/docs/harness/codex.md) for phase tracking, subagent dispatch, and the `arena runners` and `arena cross-judge pool` roles. For a direct invocation, use `update_plan` for the six phases below before framing the task or gathering evidence. Keep the phase names and order, and update their statuses as each phase finishes. Keep `Fan out` in progress until the candidates have returned or any dropouts have been recorded. For `Cross-judge`, record the result or the reason the judge was skipped before marking the phase complete. Mark `Verify` complete after checking the synthesized artifact and before sending the final reply. If this skill is part of an existing Codex plan, track it within that plan. Use the adapter's text fallback only when `update_plan` is unavailable.
+
 Open a todolist with one entry per phase (Frame, Fan out, Cross-judge, Pick, Graft, Verify) before launching anything.
 
 ## Phase A: Frame

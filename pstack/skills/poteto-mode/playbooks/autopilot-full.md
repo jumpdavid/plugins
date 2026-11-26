@@ -2,6 +2,8 @@
 
 **You own the verdicts, never the PRs. One owner carries each PR from build to merge, and nothing merges until your swarm, which never wrote the code, has proven the code that lands.**
 
+In Codex, give each owner an isolated writable worktree using [the Codex adapter](../../../docs/harness/codex.md#delegate-through-codex). Use [Codex pre-commit cleanup](../references/codex-verification.md#pre-commit-cleanup) and the parent skill's real UI or CLI verification route for the code-ready and live gates. Keep the root audit in the current session and check it on the same cadence until the delegated work ends. Keep the existing PR scope, gates, and stop conditions.
+
 A verdict covers one patch and green CI covers one head. Step 4 runs a full swarm once, and again only for a major change. The patch-id rule in `playbooks/shipping.md` can carry a lane's result, and every new head needs its own green CI.
 
 1. **The operator's gates come first.** The grant covers only the queue's items, so items the operator names as theirs and PRs outside the queue stop at merge-ready. A request to state the plan is not a go.

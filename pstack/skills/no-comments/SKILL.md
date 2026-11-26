@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # No comments
 
+In Codex, read [the Codex adapter](../../docs/harness/codex.md) for dispatching the Comment Sicko role.
+
 Spawn Comment Sicko. Act on accepted findings.
 
 Defer to Comment Sicko's fresh perspective.

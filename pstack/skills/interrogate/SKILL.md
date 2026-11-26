@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # Interrogate
 
+In Codex, read [the Codex adapter](../../docs/harness/codex.md) for plan tracking, reviewer selection, and read-only review. When invoked directly, the first workflow action after reading instructions is `update_plan` with `Frame`, `Fan out`, `Verify`, and `Report`. Initialize it before framing the review or gathering evidence. Keep the phase names and order, and update their statuses at each phase boundary. Keep `Fan out` in progress until the reviewers have returned or any missing results have been recorded. Mark `Report` complete after preparing the findings and before sending the final reply. If this skill is part of an existing Codex plan, track it within that plan. Use the adapter's text fallback only when `update_plan` is unavailable.
+
 Adversaries try to break a change or a design. A finding survives only when a run proves it. Report the findings. Do not apply fixes.
 
 ## Frame

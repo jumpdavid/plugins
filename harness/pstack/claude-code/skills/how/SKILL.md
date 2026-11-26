@@ -14,10 +14,14 @@ If the scope is ambiguous, state your interpretation and explore. The user can r
 
 ## 1. Explain
 
-Spawn one Task subagent with `subagent_type: generalPurpose` and `readonly: true` that explores and explains in one pass. Give it the user's question and this brief:
+In Codex, follow [the delegation adapter](https://github.com/cursor/plugins/blob/main/pstack/docs/harness/codex.md#delegate-through-codex) and use one read-only delegate. In an already read-only Codex session, the native subagent inherits that sandbox. If no delegated path can enforce read-only access, report the limitation and explore the codebase yourself without editing files.
 
-> You are writing an architectural explanation for a senior engineer. Explore the codebase and write an explanation that a senior engineer unfamiliar with this area could read and walk away with a solid mental model. They should understand the architecture well enough to start working in it confidently. You have read-only access to the codebase.
+Outside Codex, spawn one Task subagent with `subagent_type: generalPurpose` and `readonly: true`, applying the host adapter's tool mappings when provided.
+
+Give the subagent the user's question and this brief. If you are exploring directly, use the same brief:
+
+> You are writing an architectural explanation for a senior engineer. Explore the codebase and write an explanation that a senior engineer unfamiliar with this area could read and walk away with a solid mental model. They should understand the architecture well enough to start working in it confidently. Use only read-only operations.
 
 ## 2. Present
 
-Present the subagent's output. Light edits for clarity or context from the conversation are fine. Do not substantially rewrite it.
+Present the explanation. When a subagent wrote it, edit lightly for clarity or conversational context.
