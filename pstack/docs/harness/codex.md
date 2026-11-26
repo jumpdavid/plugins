@@ -111,6 +111,30 @@ For example:
 | `.cursor/rules/` and always-applied rules | Follow project `AGENTS.md` and Codex configuration. Use the repository-root JSON file for pstack model roles. |
 | `agent-transcripts` in the workspace | Use the Codex chat list and thread reader for the current project. Check active and pinned chats before worktree cleanup. If chat history is unavailable, report the gap. |
 
+### Switch poteto mode inside a session
+
+For a project that uses the generated skills link, add this handler to the project's `.codex/hooks.json`. Replace the example path with the physical path of the [installed hook](codex/codex-mode-hook.mjs). If `UserPromptSubmit` already has handlers, append this one.
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node '/absolute/path/to/harness/pstack/codex/docs/harness/codex/codex-mode-hook.mjs'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Trust the project and review the handler using `/hooks` in the CLI or Settings → Hooks in the app. Review the installed helper when updating it at the same path. Send `poteto-mode on` or `poteto-mode off` as its own chat message. The hook stores the selection under `$CODEX_HOME/pstack/mode/` by session ID and applies it to later prompts in that session, including after resume. Fresh chats start with their default behavior. Use `$poteto-mode` when you want to invoke the skill for a single turn. [Codex hook trust](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)
+
 ### Read project chat history
 
 Use a host reader scoped to the project and current account. For parallel history mining, expose the same scoped read-only tool to native subagents and assign each a history slice. Require a source thread ID for each slice. A trusted MCP server can provide this tool to the coordinator and its delegates. If only the coordinator can read the history, report the narrower coverage.
