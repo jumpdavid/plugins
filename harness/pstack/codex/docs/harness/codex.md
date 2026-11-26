@@ -202,4 +202,6 @@ Use [the shared worktree audit](../../skills/poteto-mode/scripts/worktree-audit.
 
 Review active and pinned chats separately before cleanup. In-flight commands, arguments without a structured absolute target, and temporary chats with no saved history require separate evidence. Use a trusted host to run the audit when the current command sandbox cannot start the history reader.
 
+For live commands, use the original host's `item/started` and `item/completed` events. Use a running `commandExecution` item's working directory and structured absolute targets to hold the worktrees it touches. On the same App Server, a client resuming a persistent thread can recover the running command from the returned turns. For an ephemeral thread, use the original client's event record. Standalone history still needs a saved item. [App Server command events](https://learn.chatgpt.com/docs/app-server#command-execution)
+
 Only a clean checkout whose commit is reachable from the selected base is eligible for cleanup. Hold unknown history, unknown Git state, and untracked or modified work. Use `git worktree remove <path>` for confirmed candidates. If Git refuses, keep the worktree and report the reason.
