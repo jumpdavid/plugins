@@ -31,8 +31,6 @@ claude code prefixes plugin commands and agents, so `/poteto-mode` is `/pstack:p
 
 claude code installs a generated copy of pstack, including this readme and the guide, from [`harness/pstack/`](https://github.com/cursor/plugins/tree/main/harness/pstack) at the repository root. after you change pstack, run `node scripts/generate-pstack-harness-trees.mjs` from the repository root and commit the result. ci fails while the generated copy is out of date.
 
-in codex, link a checkout of `pstack/skills` into the target project's `.agents/skills/pstack`. Invoke `$pstack:poteto-mode` from that project. The [Codex adapter](./docs/harness/codex.md) explains how to enable native progress tracking and configure delegation.
-
 ## get started
 
 two steps:

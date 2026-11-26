@@ -7,8 +7,6 @@ description: Configure which models pstack uses per role and at what reasoning b
 
 In Claude Code, read [the Claude Code adapter](../../docs/harness/claude-code.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Claude Code.
 
-In Codex, follow [Configure with setup-pstack](../../docs/harness/codex.md#configure-with-setup-pstack) instead of the Cursor steps below.
-
 Write `~/.cursor/rules/pstack-models.mdc`, an always-applied rule that sets pstack's model per role.
 
 ## Steps

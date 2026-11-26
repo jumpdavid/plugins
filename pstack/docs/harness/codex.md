@@ -1,43 +1,66 @@
 # pstack in Codex
 
-Use these mappings when pstack runs in Codex. They override Cursor-specific instructions in the skills and playbooks. Keep the playbook's task, scope, and checks.
+pstack skills use Cursor names. In Codex, apply the mappings below before following the shared skills and playbooks. Resolve the paths from the installed tree. Keep the task, scope, and checks from the original workflow.
 
-## Track playbook steps
+## Tools
 
-Codex disables `update_plan` by default in recent versions. Enable it for a trusted project in `.codex/config.toml`, then start a new Codex session in that project. For a one-off CLI run, pass `-c tools.update_plan.enabled=true`.
+| Cursor | Codex |
+| --- | --- |
+| `Task` | Spawn native Codex subagents using the available tool schema. Dispatch independent agents before waiting. Count a delegate after it returns usable evidence. If a call is rejected, check the tool schema and correct the call for missing seats. |
+| `AskQuestion` | Use the host's structured user-input tool when available. Otherwise ask in chat. |
+| Open a todolist or write playbook steps to it | Use `update_plan` in Default mode. Follow [Plan tracking](#plan-tracking). |
+| Run another pstack skill (`/name` or “the **name** skill”) | Read the installed `skills/<name>/SKILL.md` and follow it with this adapter. Use `$<name>` for the project-skills installation. |
+| `Grep`, `Glob` | Use `rg` and `rg --files` when the host exposes a shell. |
+
+### Plan tracking
+
+Enable the Codex plan tool in user or trusted project configuration, then start a new session.
 
 ```toml
 [tools.update_plan]
 enabled = true
 ```
 
-In Default mode, read the selected playbook first. Then call `update_plan` with its checklist before gathering task evidence. Mark the first active step `in_progress` and leave later steps `pending`. When a step finishes, call `update_plan` again before moving on. Keep the same step labels and order, mark the finished step `completed`, and mark the next step `in_progress`. Revise the checklist only when the work changes, and explain why. The Codex client renders these updates, and App Server reports them as `turn/plan/updated` events. A playbook that asks for a plan to be reviewed still uses its own review step.
+Read the adapter and the selected playbook or skill phases first. For a direct invocation, the first workflow action is `update_plan`. Call it before starting the first step or gathering evidence. Use the playbook's steps or the exact phase labels in the table below, with the first step `in_progress` and later steps `pending`. At each boundary call `update_plan` before starting the next phase. This includes short phases and optional phases whose outcome is a recorded skip. Keep the same labels throughout. A nested skill tracks progress in the caller's existing plan. If the tool is unavailable, report that native tracking is unavailable and list the steps in commentary.
 
-When a skill provides its own phases, use those phase names for a direct invocation. Move each phase to `in_progress` before acting on it. Record an allowed skip before completing an optional phase. Keep delegation in progress until the required agents finish. If required coverage is missing, report the incomplete phase and leave it open. A skill invoked under an existing plan tracks its progress within that plan. Complete the report step after preparing the report and before sending it.
+For a direct call, use the following phases:
 
-If the tool is unavailable, say that native progress tracking is unavailable and post the numbered steps in commentary. This keeps the steps visible while the work runs. The `turn/plan/updated` events are the check for native tracking.
+| Skill | Plan |
+| --- | --- |
+| `arena` | Frame, Fan out, Cross-judge, Pick, Graft, Verify. Start Cross-judge before evaluating vendor availability. Record the result or the reason it was skipped before starting Pick. |
+| `swarm` | Frame, Fan out, Aggregate, Report. Complete Fan out after collecting the requested coverage. |
+| `interrogate` | Frame, Fan out, Verify, Report. Complete Frame and start Fan out before the first reviewer spawn. After all required reviewers return, start Verify before replaying their commands. Start Report before preparing the final findings, then complete it before sending them. |
 
-## Delegate through Codex
+If required coverage is missing, leave Fan out open, report what is missing, and end the review. Resume when the required coverage is available. App Server reports real plan updates as `turn/plan/updated` events.
 
-Use native Codex subagents when the session provides the required permissions and working directory. Follow the exposed tool schema for model and effort. Cursor `Task` fields for roles, background execution, and cloud checkout do not carry over to the Codex spawn call.
+## Subagent fields
 
-Start each kickoff with the absolute path to `skills/poteto-mode/worker.md` as the entry skill specifies. Give each agent its scope, evidence to gather, and expected output. A `poteto-agent` delegate also reads the absolute `skills/poteto-mode/SKILL.md`. A Comment Sicko delegate follows `agents/comment-sicko.md`. These brief paths work with a skill-directory symlink. If dispatch fails because the payload is invalid, correct it against the live tool schema and retry only the missing seats. Count a delegate after it returns usable evidence.
+| Cursor | Codex |
+| --- | --- |
+| `subagent_type: generalPurpose` | Use a native general-purpose subagent. |
+| `poteto-agent`, `comment-sicko` | Use native subagents with the bundled role brief. Give a poteto delegate the absolute path to the installed `skills/poteto-mode/SKILL.md` and tell it to read the full file. Give Comment Sicko the absolute path to `agents/comment-sicko.md`. Ask it for proposed comment edits and apply accepted edits in the parent. Begin each kickoff with the absolute path to `skills/poteto-mode/worker.md`, as specified in poteto mode. |
+| `readonly: true` | Use [enforced read-only delegation](#read-only-delegation). |
+| `readonly: false` | Use the writable scope granted for the task. Give concurrent writers independent worktrees. |
+| `environment: "cloud"` | Use a host-provided isolated environment or a separate [writable worktree](#independent-writers) when checkout isolation is the requirement. A local worktree needs a separate writable scope. |
+| `environment: "local"` | Use a native delegate in the current checkout when it has the required permissions. |
+| `cloud_base_branch` | Resolve the requested base to a commit and create the isolated worktree there. |
+| `run_in_background: true` | Omit the field. Wait for the terminal result through the available agent tool. |
+| `resume` | Follow up with the same agent when the workflow depends on state it holds. Otherwise start a fresh agent with the previous evidence. |
+| `file_attachments` | Give the agent the paths in its brief. |
 
-### Read-only delegates
+### Read-only delegation
 
-Use native subagents for a read-only review when the parent turn enforces read-only access or its dispatch tool can enforce it on the child. A [custom agent file](https://learn.chatgpt.com/docs/agent-configuration/subagents) inherits the parent's sandbox. An App Server host can start a dedicated review turn with `sandboxPolicy: { "type": "readOnly", "networkAccess": false }` and `approvalPolicy: "never"` in `turn/start` so native delegates inherit the read-only policy. This override remains active in subsequent turns until the host changes it.
-
-When the parent must stay writable and the spawn tool cannot enforce a tighter policy, use a trusted host launcher to start each reviewer outside the parent's command sandbox. Use the current checkout so reviewers can see uncommitted changes.
+The review needs a sandbox that enforces read-only access. A native subagent can inherit it from a read-only parent. An App Server host can set `sandboxPolicy: { "type": "readOnly", "networkAccess": false }` and `approvalPolicy: "never"` for the review turn. A custom agent file inherits the parent's sandbox. When the parent must stay writable, a trusted host launcher can start a separate read-only CLI run against the same checkout.
 
 ```sh
 codex --ask-for-approval never exec --ephemeral --sandbox read-only -C "$checkout" "$brief"
 ```
 
-Keep any repro writes with the parent in a disposable location when the task permits them. If the session cannot launch a sandboxed delegate, report the limitation. Direct investigation can still use read-only operations where the playbook permits it.
+When a review is read-only, give every reviewer the current checkout, including local changes. Keep repro writes in a disposable location when the scope permits them. If neither native nor externally launched delegates can enforce read-only access, report the missing coverage. For `how`, a direct read-only investigation can still answer the user. For `interrogate`, keep Fan out open and end the review.
 
 ### Independent writers
 
-Create one Git worktree per concurrent writer from the verified base commit. Use the host worktree control or `git worktree add --detach "$worktree" "$base_commit"` when available. Explicitly supply each worktree to a separate workspace-write run. Clear additional writable roots and exclude the shared temporary roots so the sandbox keeps sibling worktrees outside each writer’s scope.
+Give each concurrent writer a worktree based on the verified commit. Use a host tool that enforces the worktree as the writable scope or start a separate CLI run from a trusted launcher.
 
 ```sh
 codex --ask-for-approval never exec --ephemeral --sandbox workspace-write \
@@ -47,11 +70,19 @@ codex --ask-for-approval never exec --ephemeral --sandbox workspace-write \
   -C "$worktree" "$brief"
 ```
 
-Have writers leave their changes in their own worktrees for the parent to inspect and commit. Launch separate CLI writers from the trusted host used for separate read-only reviews. If the required workspace isolation is unavailable, serialize implementation in the parent and report any lost parallel coverage. For separate CLI runs, pass a resolved model with `--model` and a supported effort with `-c 'model_reasoning_effort="<effort>"'`. For inherited seats, use the parent's values if exposed. Report defaults when the launcher cannot resolve them. Wait for each worker result and verify actionable findings or diffs in the parent.
+Collect and inspect each diff in the parent before committing. If the host cannot isolate writable scopes, serialize implementation and report the lost parallel coverage. For Autopilot, the isolated owner hands the parent its diff and verification evidence. The parent handles Git metadata, PR publication, CI checks, and merge operations within the operator's grant. Keep the owner and independent verifier separate.
 
-## Resolve role models
+## Models
 
-Read `.pstack-models.json` from the repository root if it exists. Use the repository root because Codex protects `.codex/` from writes in its workspace sandbox. The file maps the role names used by pstack to an ordered list of seats. Each seat is `{ "model": "<Codex model ID>", "effort": "<reasoning effort>" }`, with `effort` optional, or the string `"inherit-parent"`. For example:
+| Cursor | Codex |
+| --- | --- |
+| A Cursor slug such as `claude-*`, `grok-*`, or `gpt-*` | Select a model ID and reasoning effort supported by the Codex host. A Cursor slug is not a Codex override. For separate CLI runs use `--model` and `-c model_reasoning_effort=<effort>`. |
+| `auto` or `inherit-parent` | Inherit the parent model and effort. A separate CLI run can use the parent's explicit values when they are known. |
+| `pstack-models.mdc` | Read `.pstack-models.json` from the repository root. Each role maps to an ordered list of seats. A seat is `"inherit-parent"` or an object with `model` and optional `effort`. |
+
+An unconfigured role inherits the parent. The `arena runners` and `interrogate reviewers` roles default to two independent seats. Honor the explicit count in the request. If an explicit choice is unavailable, report it and inherit for that seat. For a cross-judge, require a known different vendor. Report a skipped cross-judge when no eligible seat is available.
+
+For `setup-pstack`, use the current host's model and effort choices. If the tool schema leaves them open and the local CLI is available, run [the model catalog helper](codex/codex-models.mjs) with Node. Update only the roles the user changes. Write the JSON file after validating the selected seats. For example:
 
 ```json
 {
@@ -60,12 +91,28 @@ Read `.pstack-models.json` from the repository root if it exists. Use the reposi
 }
 ```
 
-An absent role defaults to `inherit-parent`, with two independent seats for `arena runners` and `interrogate reviewers`. The user's explicit count controls the number of reviewers. `inherit-parent` means omit both overrides. For an explicit seat, use only model and effort values the current subagent tool supports. Consult the live Codex model catalog when the tool leaves values open. If a configured choice is unavailable or rejected, name it and retry once with both overrides omitted. Apply the same rules to one-off overrides.
+## Paths
 
-Treat independent reviewers on the same provider as multiple perspectives. Call a review cross-provider only when the selected providers are known and differ. If no eligible cross-provider judge is available for Arena, skip that judge and report the gap.
+| Cursor | Codex |
+| --- | --- |
+| `.cursor/skills/` and `~/.cursor/skills/` | Install the generated `harness/pstack/codex/skills` in the target project's `.agents/skills/pstack`. Write new project skills in `.agents/skills/`. |
+| `~/.cursor/plugins/` and `.cursor-plugin/plugin.json` | Find the skills through Codex discovery. Resolve role briefs, guides, and runtime files from the generated tree next to `skills/`. |
+| `.cursor/rules/` and always-applied rules | Follow project `AGENTS.md` and Codex configuration. Use the repository-root JSON file for pstack model roles. |
+| `agent-transcripts` in the workspace | Use the Codex chat list and thread reader for the current project. Check active and pinned chats before worktree cleanup. If chat history is unavailable, report the gap. |
 
-### Configure with setup-pstack
+## Cursor-only features
 
-From the target checkout, read the current role file and preserve roles the user is not changing. The native subagent tool schema takes precedence. If it does not enumerate choices and local Codex CLI access is available, use [the model catalog helper](../../skills/poteto-mode/scripts/codex-models.mjs) with `node`. It queries the visible model catalog and supported reasoning efforts through Codex App Server `model/list`. If neither source confirms a choice, offer `inherit-parent` for that role.
+| Cursor | Codex |
+| --- | --- |
+| Cursor Automations, webhooks, and Bugbot setup | These integrations require a separate migration. Record the skipped step. Process existing GitHub review threads with the forge commands in the playbook. |
+| A built-in PR tool | Use the forge command the step provides, such as `gh pr create`. |
+| `/loop` | Keep the current task active and run the named check until its exit condition is met. Use the watcher command when the playbook provides one. |
+| `/create-skill` | Use `$skill-creator` when available. |
+| `/deslop` | Read the bundled `cursor-team-kit/skills/deslop/SKILL.md` if available. Otherwise review the actual diff for redundant comments, unnecessary guards, type-check bypasses, avoidable nesting, and departures from surrounding code. Apply behavior-preserving edits and run `git diff --check` and the relevant tests before committing. |
+| `control-ui`, `control-cli` | Run the behavior through the project's UI driver, the browser or computer tool, or the actual CLI entry point. For visual parity capture the baseline and target on the same surface and state. Require equal dimensions and zero decoded pixel difference. Keep the captures and comparator output as evidence. |
 
-Honor choices supplied in the request. Use the session's structured question tool when a choice is needed, or ask in chat. Validate every chosen seat against the available overrides before writing the JSON file. Report the path and the roles updated. The next pstack invocation reads the file directly.
+### Worktree cleanup
+
+Use [the shared worktree audit](../../skills/poteto-mode/scripts/worktree-audit.sh) with `--history-command` set to the absolute installed path of [the Codex history reader](codex/codex-worktree-history.mjs). The reader queries scoped chat metadata for the exact Git worktree paths. Check pinned and active chats separately, including chats that operate on the worktree from another working directory.
+
+Only a clean checkout whose commit is reachable from the selected base is eligible for cleanup. Hold unknown history, unknown Git state, and untracked or modified work. Use `git worktree remove <path>` for confirmed candidates. If Git refuses, keep the worktree and report the reason.

@@ -3,9 +3,12 @@
 # recorded chat history. Refresh the base ref when it tracks origin.
 # Report cleanup candidates without removing worktrees.
 #
-# Usage: worktree-audit.sh [--history cursor|codex] [-b|--base <ref>] [repo-path]
+# Usage: worktree-audit.sh [--history-command <path>] [-b|--base <ref>] [repo-path]
 #   repo-path defaults to the current repo.
-#   --history selects Cursor transcripts (default) or scoped Codex thread metadata.
+#   --history-command receives absolute worktree paths and returns a JSON object
+#   keyed by path with {timestamp, hold} per worktree. Timestamp is in epoch
+#   seconds and hold flags active use. Missing records require review.
+#   Without a command, use the local Cursor transcripts.
 #   -b sets the ref the MERGED column checks against (e.g. origin/integration).
 #   Without it the base is origin/HEAD, then origin/main, then origin/master.
 #   origin/HEAD is the remote's default branch, not necessarily the branch PRs
@@ -13,21 +16,20 @@
 set -u
 
 base=""
-history_source=cursor
+history_command=
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-b|--base) [ $# -ge 2 ] || { echo "error: $1 needs a ref" >&2; exit 2; }; base="$2"; shift 2 ;;
-	--history) [ $# -ge 2 ] || { echo "error: $1 needs cursor or codex" >&2; exit 2; }; history_source="$2"; shift 2 ;;
+	--history-command) [ $# -ge 2 ] && [ -n "$2" ] || { echo "error: $1 needs a path" >&2; exit 2; }; history_command="$2"; shift 2 ;;
 	-h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
 	-*) echo "error: unknown option: $1" >&2; exit 2 ;;
 	*) break ;;
 	esac
 done
-case "$history_source" in
-	cursor|codex) ;;
-	*) echo "error: unknown history source: $history_source" >&2; exit 2 ;;
+case "$history_command" in
+	""|/*) ;;
+	*) history_command="$PWD/$history_command" ;;
 esac
-script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || exit 1
 
 repo="${1:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -z "$repo" ] && { echo "not in a git repo; pass a repo path" >&2; exit 1; }
@@ -80,21 +82,17 @@ else
 	stat_fmt=(-f '%m'); fmt_day() { date -r "$1" '+%Y-%m-%d'; }
 fi
 
-case "$history_source" in
-	cursor)
-		slug=$(printf '%s' "$main_wt" | sed 's#^/##; s#/#-#g')
-		transcripts="$HOME/.cursor/projects/$slug/agent-transcripts"
-		;;
-	codex)
-		codex_history='{}'
-		if [ "${#worktrees[@]}" -gt 1 ]; then
-			if ! codex_history=$(node "$script_dir/codex-worktree-history.mjs" "${worktrees[@]:1}"); then
-				echo "warn: Codex history unavailable; unknown worktrees require review" >&2
-				codex_history='{}'
-			fi
-		fi
-		;;
-esac
+history='{}'
+if [ -z "$history_command" ]; then
+	slug=$(printf '%s' "$main_wt" | sed 's#^/##; s#/#-#g')
+	transcripts="$HOME/.cursor/projects/$slug/agent-transcripts"
+elif [ "${#worktrees[@]}" -gt 1 ]; then
+	if ! history=$("$history_command" "${worktrees[@]:1}") ||
+		! jq -es 'length == 1 and (.[0] | type == "object")' <<< "$history" >/dev/null 2>&1; then
+		echo "warn: worktree history unavailable; unknown worktrees require review" >&2
+		history='{}'
+	fi
+fi
 now=$(date +%s)
 
 echo "# base: $base"
@@ -135,22 +133,20 @@ for wt in "${worktrees[@]:1}"; do
 	[ -z "$pr" ] && pr="-"
 
 	last_ts=0; pinned_or_active=false
-	case "$history_source" in
-		cursor)
-			if [ -d "$transcripts" ]; then
-				# Match the full path and its delimiter so sibling names cannot collide.
-				while IFS= read -r -d '' transcript; do
-					ts=$(stat "${stat_fmt[@]}" "$transcript" 2>/dev/null) || continue
-					[ "$ts" -gt "$last_ts" ] && last_ts=$ts
-				done < <(rg -l -0 -F -e "${wt}/" -e "${wt}\"" "$transcripts" 2>/dev/null)
-			fi
-			;;
-		codex)
-			IFS=$'\t' read -r last_ts pinned_or_active < <(
-				jq -r --arg wt "$wt" '.[$wt] | [.timestamp // 0, .hold // false] | @tsv' <<< "$codex_history"
-			)
-			;;
-	esac
+	if [ -n "$history_command" ]; then
+		IFS=$'\t' read -r last_ts pinned_or_active < <(
+			jq -r --arg wt "$wt" '
+				.[$wt] | select(type == "object" or type == "null") |
+				[(.timestamp | if type == "number" and . > 0 and . == floor then . else 0 end), (.hold == true)] |
+				@tsv' <<< "$history"
+		)
+	elif [ -d "$transcripts" ]; then
+		# Match the full path and its delimiter so sibling names cannot collide.
+		while IFS= read -r -d '' transcript; do
+			ts=$(stat "${stat_fmt[@]}" "$transcript" 2>/dev/null) || continue
+			[ "$ts" -gt "$last_ts" ] && last_ts=$ts
+		done < <(rg -l -0 -F -e "${wt}/" -e "${wt}\"" "$transcripts" 2>/dev/null)
+	fi
 	last=unknown
 	if [ "${last_ts:-0}" -gt 0 ]; then last=$(fmt_day "$last_ts" 2>/dev/null) || last=unknown; fi
 
@@ -158,7 +154,7 @@ for wt in "${worktrees[@]:1}"; do
 	elif [[ "$dirty" == wip:* ]]; then bucket=hold-wip
 	elif [[ "$dirty" == untracked:* ]]; then bucket=hold-untracked
 	elif [[ "$pr" == */open || "$pr" == */draft ]]; then bucket=hold-open-pr
-	elif [ "$pinned_or_active" = true ]; then bucket=verify-recent-chat
+	elif [ "${pinned_or_active:-false}" = true ]; then bucket=verify-recent-chat
 	elif [ "$last" = unknown ]; then bucket=review-history-unknown
 	elif [ $(( (now - last_ts) / 86400 )) -le 4 ]; then bucket=verify-recent-chat
 	elif [ "$merged" = YES ]; then bucket=safe

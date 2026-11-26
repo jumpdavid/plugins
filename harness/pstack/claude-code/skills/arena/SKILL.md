@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 In Claude Code, read [the Claude Code adapter](../../docs/harness/claude-code.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Claude Code.
 
-Open a todolist before framing or gathering evidence. Use one entry per phase (Frame, Fan out, Cross-judge, Pick, Graft, Verify). In Codex, follow [plan tracking](../../docs/harness/codex.md#track-playbook-steps) and call `update_plan` at the start and end of each phase. Record any skipped cross-judge before advancing to Pick.
+Open a todolist with one entry per phase (Frame, Fan out, Cross-judge, Pick, Graft, Verify) before launching anything.
 
 ## Phase A: Frame
 
@@ -16,24 +16,18 @@ Every candidate gets the same prompt, so the prompt is the contract.
 
 1. State the artifact each candidate is producing.
 2. Derive the rubric, 3-6 concrete gradeable criteria for what success looks like on *this* task. It is the picker's tool in Phase D. Candidates only see the task.
-3. Select the `arena runners` seats. In Codex, use [role models](../../docs/harness/codex.md#resolve-role-models). Outside Codex, read `~/.cursor/rules/pstack-models.mdc` and default to `claude-fable-5-2-high`, `claude-opus-5-5-high-fast`, and `gemini-4-neon-xhigh`, applying the host adapter when provided. For `auto` or `inherit-parent`, omit the model override. If Task rejects a slug, report the fallback to the nearest valid slug from the same family or drop the seat. Families use the longest matching prefix of `claude-fable-*`, `claude-*`, and `gemini-*` after removing a leading `cursor-`, or the text before the first hyphen for other models. Keep at least two runners.
+3. Pick the runners from the `arena runners` line in `~/.cursor/rules/pstack-models.mdc`, by default `claude-fable-5-2-high`, `claude-opus-5-5-high-fast`, and `gemini-4-neon-xhigh`. An `auto` or `inherit-parent` entry is the parent model, so omit `model` and spawn `generalPurpose`. If the Task tool rejects a slug, use the nearest valid slug of the same family or drop the seat, keep at least two runners, and say so. Families go by prefix, and the longest match wins: `claude-fable-*`, `claude-*`, and `gemini-*`, after dropping a leading `cursor-`. Any other slug's family is its text before the first hyphen. Spawn more for multiple design directions, and repeat one model when the work is generation-bound, not judgment-sensitive. Pick each subagent's reasoning level per the Subagents section of the **poteto-mode** skill.
 4. Give each candidate its own output location (a git worktree where possible, otherwise `/tmp/arena-<slug>/candidate-<n>/`), per the **separate-before-serializing-shared-state** principle skill.
-
-Add runners for multiple design directions. Repeat a model for generation-bound work when the rubric calls for more candidates. Outside Codex, set reasoning level per the Subagents section of **poteto-mode**.
 
 ## Phase B: Fan out
 
-Dispatch all candidates before waiting. Give each the task, the grounding files, its output location, and a request for the artifact and a short rationale. In Codex, use [native delegation and sandbox isolation](../../docs/harness/codex.md#delegate-through-codex). In Cursor, use `run_in_background: true`. Apply the host adapter when provided.
+Spawn all N subagents in one message with `run_in_background: true`, each with the task, the path to the shared grounding, its own output path, and instructions to produce the artifact and a short rationale naming the alternatives it considered and what it rejected.
 
 If a candidate produces no output, proceed with N-1 and note the dropout.
 
 ## Phase C: Cross-judge
 
-After all Phase B candidates complete, select one judge from a different vendor than the parent. In Codex, use the `arena cross-judge pool` from [role models](../../docs/harness/codex.md#resolve-role-models) and dispatch a [read-only delegate](../../docs/harness/codex.md#read-only-delegates). If no eligible seat or enforced read-only path is available, record the reason and continue to Phase D.
-
-Outside Codex, read `arena cross-judge pool` in `~/.cursor/rules/pstack-models.mdc` and default to `claude-opus-5-5-high-fast` and `gemini-4-neon-xhigh`, applying the host adapter when provided. Fable counts as Claude. If the parent's model is unknown, use the first real slug and report that the vendor check could not run. If Task rejects a slug, use the nearest available slug in the same family, then the next eligible seat. Report any skipped judge.
-
-The judge scores each candidate by path label against the rubric and recommends a base.
+After all Phase B candidates complete, spawn one readonly judge from the `arena cross-judge pool` line in `~/.cursor/rules/pstack-models.mdc`, by default `claude-opus-5-5-high-fast`, `gemini-4-neon-xhigh`. The judge is never from the parent's vendor, and Fable counts as Claude for that check, so use the first entry from another vendor. An `auto` or `inherit-parent` entry is the parent model. If you do not know the parent's model, use the first real slug and say that the vendor check did not run. If the Task tool rejects a slug, use the nearest valid slug of the same family, then the next such entry, or skip the judge, and say so. While you read in Phase D, the judge scores each candidate, by path label, on each rubric criterion and recommends a base.
 
 ## Phase D: Pick a base
 
