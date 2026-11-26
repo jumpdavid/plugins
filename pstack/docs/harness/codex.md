@@ -111,6 +111,10 @@ For example:
 | `.cursor/rules/` and always-applied rules | Follow project `AGENTS.md` and Codex configuration. Use the repository-root JSON file for pstack model roles. |
 | `agent-transcripts` in the workspace | Use the Codex chat list and thread reader for the current project. Check active and pinned chats before worktree cleanup. If chat history is unavailable, report the gap. |
 
+### Read project chat history
+
+Use a host reader scoped to the project and current account. For parallel history mining, expose the same scoped read-only tool to native subagents and assign each a history slice. Require a source thread ID for each slice. A trusted MCP server can provide this tool to the coordinator and its delegates. If only the coordinator can read the history, report the narrower coverage.
+
 ### Write a project skill
 
 Codex's workspace permissions protect `.agents/` by default. For generation or maintenance, use a host-selected authoring profile that grants write access to the named project skill. Keep the installed pstack package and other skills outside the write scope. Add a specific evidence or scratch directory when the verifier needs one.
