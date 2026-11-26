@@ -80,11 +80,11 @@ Collect and inspect each diff in the parent before committing. If the host canno
 | --- | --- |
 | A Cursor slug such as `claude-*`, `grok-*`, or `gpt-*` | Select a model ID and reasoning effort supported by the Codex host. A Cursor slug is not a Codex override. For separate CLI runs use `--model` and `-c model_reasoning_effort=<effort>`. |
 | `auto` or `inherit-parent` | Inherit the parent model and effort. A separate CLI run can use the parent's explicit values when they are known. |
-| `pstack-models.mdc` | Read `.pstack-models.json` from the repository root. Each role maps to an ordered list of seats. A seat is `"inherit-parent"` or an object with `model` and optional `effort`. |
+| `pstack-models.mdc` | Read `.pstack-models.json` from the repository root. Each role maps to an ordered list of seats. A seat is `"inherit-parent"` or an object with `model` and optional `effort`. The optional `budget` field records the last budget selected in setup. Dispatch reads the resulting seat values. |
 
 An unconfigured role inherits the parent. The `arena runners` and `interrogate reviewers` roles default to two independent seats. Honor the explicit count in the request. If an explicit choice is unavailable, report it and inherit for that seat. For a cross-judge, require a known different vendor. Report a skipped cross-judge when no eligible seat is available.
 
-For `setup-pstack`, use the current host's model and effort choices. If the tool schema leaves them open and the local CLI is available, run [the model catalog helper](codex/codex-models.mjs) with Node. Update only the roles the user changes. Write the JSON file after validating the selected seats. For example:
+For example:
 
 ```json
 {
@@ -92,6 +92,13 @@ For `setup-pstack`, use the current host's model and effort choices. If the tool
   "interrogate reviewers": ["inherit-parent", "inherit-parent"]
 }
 ```
+
+## setup-pstack
+
+- Read the repository-root `.pstack-models.json`. Files with only role entries are valid. Use the current host's model and effort choices. If the tool schema leaves them open and the local CLI is available, run [the model catalog helper](codex/codex-models.mjs) with Node.
+- Offer the shared budget choices. When the user asks for a budget change, apply the choice to every configured model seat. Use the role's baseline to calculate each target. The baseline is `high` for `arena runners`, `arena cross-judge pool`, `swarm workers`, and `interrogate reviewers`, and `xhigh` for the other setup roles. Use `large` for zero steps down, `medium` for one step down, and `small` for two steps down on the ladder `xhigh`, `high`, `medium`, `low`.
+- Set each seat's `effort` to the highest value that its existing model supports at or below the target. Keep model IDs, seat counts and order, and `inherit-parent` seats. Missing roles continue to inherit. If a configured model has no eligible effort or is unavailable, report the seat and resolve it before writing the budget change. Calculate each change from the baseline so repeated setup and changing back to a previous level give the same result.
+- Validate the selected seats, then write the budget label as the top-level `budget` string in the same JSON object as the role arrays. Keep the budget and updated efforts together. When the user requests changes to specific roles only, update only those roles and keep any recorded budget.
 
 ## Paths
 
