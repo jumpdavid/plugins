@@ -15,8 +15,8 @@ test("worktree audit requires known history and uses scoped, paginated Codex met
   ctx.after(() => rmSync(tmp, { recursive: true, force: true }));
   const repo = join(tmp, "repo");
   const bin = join(tmp, "bin");
-  const paths = ["recent tree", "old", "pinned", "absent", "closed", "untracked", "missing", "cross"].map((name) => join(tmp, name));
-  const [recent, old, pinned, absent, closed, untracked, missing, cross] = paths;
+  const paths = ["recent tree", "old", "pinned", "absent", "closed", "untracked", "missing", "cross", "absolute read", "absolute list", "absolute search"].map((name) => join(tmp, name));
+  const [recent, old, pinned, absent, closed, untracked, missing, cross, absoluteRead, absoluteList, absoluteSearch] = paths;
 
   mkdirSync(bin);
   writeFileSync(join(bin, "origin"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
@@ -47,7 +47,7 @@ if (process.argv[2] === "debug") {
 }
 assert.deepEqual(process.argv.slice(2), ["app-server", "--stdio"]);
 const paths = JSON.parse(process.env.PSTACK_AUDIT_PATHS);
-const [recent, old, pinned, absent, closed, untracked, missing, cross] = paths;
+const [recent, old, pinned, absent, closed, untracked, missing, cross, absoluteRead, absoluteList, absoluteSearch] = paths;
 const repo = process.env.PSTACK_AUDIT_REPO;
 const now = Math.floor(Date.now() / 1000);
 const weekAgo = now - 7 * 86400;
@@ -62,6 +62,14 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     return send({ data: [
       { item: { type: "commandExecution", cwd: process.env.PSTACK_INVALID_ITEM_CWD ? null : cross + "/src" } },
       { item: { type: "commandExecution", cwd: absent + "-neighbor" } },
+      { item: { type: "commandExecution", cwd: repo, commandActions: [
+        { type: "read", path: absoluteRead + "/nested/file.txt" },
+        { type: "listFiles", path: absoluteList },
+        { type: "search", path: absoluteSearch + "/nested" },
+        { type: "read", path: absent + "-neighbor/file.txt" },
+        { type: "search", path: "../absent" },
+        { type: "unknown", path: absent },
+      ] } },
       { item: { type: "userMessage", content: [{ type: "text", text: absent }] } },
     ], nextCursor: null });
   }
@@ -104,6 +112,9 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   assert.equal(rows.get(recent)?.bucket, "verify-recent-chat");
   assert.equal(rows.get(pinned)?.bucket, "verify-recent-chat");
   assert.equal(rows.get(cross)?.bucket, "verify-recent-chat");
+  for (const target of [absoluteRead, absoluteList, absoluteSearch]) {
+    assert.equal(rows.get(target)?.bucket, "verify-recent-chat");
+  }
   assert.equal(rows.get(old)?.bucket, "safe");
   assert.deepEqual(rows.get(absent), { lastChat: "unknown", bucket: "review-history-unknown" });
   assert.equal(rows.get(closed)?.bucket, "review");

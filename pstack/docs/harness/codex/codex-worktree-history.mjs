@@ -6,6 +6,7 @@ import { listPages, withAppServer } from "./codex-app-server.mjs";
 
 const paths = process.argv.slice(2);
 const updates = new Map(paths.map((path) => [path, null]));
+const pathActions = new Set(["read", "listFiles", "search"]);
 if (updates.size === 0 || paths.some((path) => !isAbsolute(path))) {
   console.error("Expected absolute Git worktree paths.");
   process.exit(2);
@@ -57,8 +58,16 @@ try {
           if (typeof item.cwd !== "string" || !isAbsolute(item.cwd)) {
             throw new Error("Missing command working directory.");
           }
+          const targets = [item.cwd];
+          if (Array.isArray(item.commandActions)) {
+            for (const action of item.commandActions) {
+              if (pathActions.has(action?.type) && typeof action.path === "string" && isAbsolute(action.path)) {
+                targets.push(action.path);
+              }
+            }
+          }
           for (const path of paths) {
-            if (isInside(path, item.cwd)) record(path, thread.updatedAt, hold);
+            if (targets.some(target => isInside(path, target))) record(path, thread.updatedAt, hold);
           }
         }
       }
