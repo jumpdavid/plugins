@@ -196,6 +196,8 @@ This uses a running local daemon. To target an App Server endpoint supplied by t
 
 Record the enqueue and the new turn's terminal result separately. A successful CLI exit confirms the enqueue. If it warns that resume failed, check whether the named thread actually ran the follow-up. Recover from the last verified checkpoint after an interrupted turn. A watcher or scheduler owns the event that sends the follow-up.
 
+For timed follow-ups, confirm the previous tick's terminal result on the same thread before arming the next. Keep an unverified tick pending while the turn is running. If the terminal result lacks the expected checkpoint, report the incomplete check. Stop scheduling when the workflow's completion condition is verified.
+
 ### Worktree cleanup
 
 Use [the shared worktree audit](../../skills/poteto-mode/scripts/worktree-audit.sh) with `--history-command` set to the absolute installed path of [the Codex history reader](codex/codex-worktree-history.mjs). The reader scopes the history query to the current account and registered Git worktrees, including the main checkout. It uses saved command working directories and structured absolute targets from recent, pinned, or active threads to recognize activity in another worktree. It returns activity metadata for the worktrees being audited.
