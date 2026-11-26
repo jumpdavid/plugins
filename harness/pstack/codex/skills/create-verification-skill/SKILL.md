@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Create a verification skill
 
-In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex. Resolve the link from the physical path of this SKILL.md. If you opened the skill through a project symlink, run `realpath` on this SKILL.md first.
+In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex. Resolve the installed SKILL.md with `realpath`, then open `../../docs/harness/codex.md` from its physical directory. The generated package root ends in `harness/pstack/codex`. If the adapter read fails, correct the path before using workflow tools or reading task files.
 
 Every serious project needs a scripted way to drive the real app and prove behavior: launch it, exercise a feature the way a user would, and capture evidence. This skill generates that as a project-local skill (`.cursor/skills/verify-<app>/`) tailored to the repo. You write the generator's output for the next agent, not for a human: it will be read cold, mid-task, by an agent that has never seen the app.
 

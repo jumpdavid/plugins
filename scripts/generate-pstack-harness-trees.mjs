@@ -140,7 +140,7 @@ function render({ tree, name, assets, manifests, runtimeOnly = false }) {
   ];
   const files = new Map(copies.map((path) => [relative(PSTACK, path), file(path)]));
   const adapterLocation = tree === "codex"
-    ? " Resolve the link from the physical path of this SKILL.md. If you opened the skill through a project symlink, run `realpath` on this SKILL.md first."
+    ? " Resolve the installed SKILL.md with `realpath`, then open `../../docs/harness/codex.md` from its physical directory. The generated package root ends in `harness/pstack/codex`. If the adapter read fails, correct the path before using workflow tools or reading task files."
     : "";
   const line =
     `In ${name}, read [the ${name} adapter](../../${adapter}) once per session before you follow this skill. ` +

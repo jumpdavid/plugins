@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Create a formal verification skill
 
-In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex. Resolve the link from the physical path of this SKILL.md. If you opened the skill through a project symlink, run `realpath` on this SKILL.md first.
+In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex. Resolve the installed SKILL.md with `realpath`, then open `../../docs/harness/codex.md` from its physical directory. The generated package root ends in `harness/pstack/codex`. If the adapter read fails, correct the path before using workflow tools or reading task files.
 
 A test checks the cases that someone thought to write. Formal verification checks every case in a stated scope: every order of steps in a model, every input up to a bound, or every input. This skill finds the part of the repo where that matters most, verifies one property of it, and leaves a project-local skill that lets the next agent check a change against that property. Write that skill for an agent who reads it cold, mid-change, and has never seen your work. The user must be able to trust the result and act on it without learning the verification language.
 
