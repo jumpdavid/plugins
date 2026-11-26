@@ -13,17 +13,19 @@ enabled = true
 
 In Default mode, read the selected playbook first. Then call `update_plan` with its checklist before gathering task evidence. Mark the first active step `in_progress` and leave later steps `pending`. When a step finishes, call `update_plan` again before moving on. Keep the same step labels and order, mark the finished step `completed`, and mark the next step `in_progress`. Revise the checklist only when the work changes, and explain why. The Codex client renders these updates, and App Server reports them as `turn/plan/updated` events. A playbook that asks for a plan to be reviewed still uses its own review step.
 
+When a skill provides its own phases, use those phase names for a direct invocation. Move each phase to `in_progress` before acting on it. Record an allowed skip before completing an optional phase. Keep delegation in progress until the required agents finish. If required coverage is missing, report the incomplete phase and leave it open. A skill invoked under an existing plan tracks its progress within that plan. Complete the report step after preparing the report and before sending it.
+
 If the tool is unavailable, say that native progress tracking is unavailable and post the numbered steps in commentary. This keeps the steps visible while the work runs. The `turn/plan/updated` events are the check for native tracking.
 
 ## Delegate through Codex
 
 Use native Codex subagents when the session provides the required permissions and working directory. Follow the exposed tool schema for model and effort. Cursor `Task` fields for roles, background execution, and cloud checkout do not carry over to the Codex spawn call.
 
-Start each kickoff with the absolute path to `skills/poteto-mode/worker.md` as the entry skill specifies. Give each agent its scope, evidence to gather, and expected output. A `poteto-agent` delegate also reads the absolute `skills/poteto-mode/SKILL.md`. A Comment Sicko delegate follows `agents/comment-sicko.md`. These brief paths work with a skill-directory symlink.
+Start each kickoff with the absolute path to `skills/poteto-mode/worker.md` as the entry skill specifies. Give each agent its scope, evidence to gather, and expected output. A `poteto-agent` delegate also reads the absolute `skills/poteto-mode/SKILL.md`. A Comment Sicko delegate follows `agents/comment-sicko.md`. These brief paths work with a skill-directory symlink. If dispatch fails because the payload is invalid, correct it against the live tool schema and retry only the missing seats. Count a delegate after it returns usable evidence.
 
 ### Read-only delegates
 
-Use native subagents for a read-only review when their work is already sandboxed read-only. A [custom agent file](https://learn.chatgpt.com/docs/agent-configuration/subagents) inherits the parent's sandbox. With an App Server client, start a dedicated review turn with `sandboxPolicy: { "type": "readOnly", "networkAccess": false }` and `approvalPolicy: "never"` in `turn/start` so native delegates inherit the read-only policy. This override remains active in subsequent turns until the client changes it.
+Use native subagents for a read-only review when the parent turn enforces read-only access or its dispatch tool can enforce it on the child. A [custom agent file](https://learn.chatgpt.com/docs/agent-configuration/subagents) inherits the parent's sandbox. An App Server host can start a dedicated review turn with `sandboxPolicy: { "type": "readOnly", "networkAccess": false }` and `approvalPolicy: "never"` in `turn/start` so native delegates inherit the read-only policy. This override remains active in subsequent turns until the host changes it.
 
 When the parent must stay writable and the spawn tool cannot enforce a tighter policy, use a trusted host launcher to start each reviewer outside the parent's command sandbox. Use the current checkout so reviewers can see uncommitted changes.
 
@@ -45,7 +47,7 @@ codex --ask-for-approval never exec --ephemeral --sandbox workspace-write \
   -C "$worktree" "$brief"
 ```
 
-Have writers leave their changes in their own worktrees for the parent to inspect and commit. If the required workspace isolation is unavailable, serialize implementation in the parent and report any lost parallel coverage. For separate CLI runs, pass a resolved model with `--model` and a supported effort with `-c 'model_reasoning_effort="<effort>"'`. For inherited seats, use the parent’s values if exposed. Report defaults when the launcher cannot resolve them. Wait for each worker result and verify actionable findings or diffs in the parent.
+Have writers leave their changes in their own worktrees for the parent to inspect and commit. Launch separate CLI writers from the trusted host used for separate read-only reviews. If the required workspace isolation is unavailable, serialize implementation in the parent and report any lost parallel coverage. For separate CLI runs, pass a resolved model with `--model` and a supported effort with `-c 'model_reasoning_effort="<effort>"'`. For inherited seats, use the parent's values if exposed. Report defaults when the launcher cannot resolve them. Wait for each worker result and verify actionable findings or diffs in the parent.
 
 ## Resolve role models
 
@@ -64,6 +66,6 @@ Treat independent reviewers on the same provider as multiple perspectives. Call 
 
 ### Configure with setup-pstack
 
-From the target checkout, read the current role file and preserve roles the user is not changing. The native subagent tool schema takes precedence. If it does not enumerate choices and local Codex CLI access is available, use [the model catalog helper](../../skills/poteto-mode/scripts/codex-models.mjs) with `node`. It lists model IDs and supported reasoning efforts through Codex App Server `model/list`. If neither source confirms a choice, offer `inherit-parent` for that role.
+From the target checkout, read the current role file and preserve roles the user is not changing. The native subagent tool schema takes precedence. If it does not enumerate choices and local Codex CLI access is available, use [the model catalog helper](../../skills/poteto-mode/scripts/codex-models.mjs) with `node`. It queries the visible model catalog and supported reasoning efforts through Codex App Server `model/list`. If neither source confirms a choice, offer `inherit-parent` for that role.
 
 Honor choices supplied in the request. Use the session's structured question tool when a choice is needed, or ask in chat. Validate every chosen seat against the available overrides before writing the JSON file. Report the path and the roles updated. The next pstack invocation reads the file directly.

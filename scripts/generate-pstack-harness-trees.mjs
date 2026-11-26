@@ -10,7 +10,8 @@ const SKILLS = join(PSTACK, "skills");
 // Outside pstack/ so Cursor, which copies the whole plugin folder, does not install this tree too.
 const OUT = join(ROOT, "harness", "pstack");
 const TREE = "claude-code";
-const ADAPTER = "docs/harness/claude-code.md";
+const HARNESS_DOCS = "docs/harness";
+const ADAPTER = `${HARNESS_DOCS}/claude-code.md`;
 const GUIDE = "docs/guide";
 const MANIFESTS = ["plugin.json", ".claude-plugin/plugin.json"];
 const COMMAND = "node scripts/generate-pstack-harness-trees.mjs";
@@ -18,7 +19,7 @@ const GITHUB = "https://github.com/cursor/plugins";
 const LINK = /\]\(([^)\s]+)\)/g;
 const README = `# pstack harness tree
 
-This folder is generated from \`pstack/skills\`, \`pstack/agents\`, \`pstack/${GUIDE}\`, \`pstack/${ADAPTER}\`, \`pstack/README.md\`, \`pstack/LICENSE\`, and \`pstack/plugin.json\`. Do not edit it by hand.
+This folder is generated from \`pstack/skills\`, \`pstack/agents\`, \`pstack/${GUIDE}\`, \`pstack/${HARNESS_DOCS}\`, \`pstack/README.md\`, \`pstack/LICENSE\`, and \`pstack/plugin.json\`. Do not edit it by hand.
 
 Cursor uses \`pstack/\` directly, and Claude Code installs \`${TREE}/\`. The tree leaves out the rest of \`pstack/\`, such as \`pstack/automations\` and \`pstack/assets\`. A relative link to a pstack file that the tree leaves out points at that file on GitHub \`main\` instead.
 
@@ -121,7 +122,7 @@ function render() {
     ...walk(SKILLS),
     ...walk(join(PSTACK, "agents")),
     ...walk(join(PSTACK, GUIDE)),
-    join(PSTACK, ADAPTER),
+    ...walk(join(PSTACK, HARNESS_DOCS)),
     join(PSTACK, "README.md"),
   ];
   const files = new Map(copies.map((path) => [relative(PSTACK, path), file(path)]));

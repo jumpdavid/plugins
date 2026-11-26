@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Read-only worktree prune audit. Classifies every git worktree by size, merge
-# state, uncommitted work, remote/PR state, and the most recent chat that
-# operated in it. Emits a table sorted by size with a suggested bucket. Never
-# deletes anything; deletion stays a human-gated step in the playbook.
+# Audit worktrees by size, merge state, uncommitted work, PR state, and
+# recorded chat history. Refresh the base ref when it tracks origin.
+# Report cleanup candidates without removing worktrees.
 #
 # Usage: worktree-audit.sh [--history cursor|codex] [-b|--base <ref>] [repo-path]
 #   repo-path defaults to the current repo.
@@ -28,10 +27,11 @@ case "$history_source" in
 	cursor|codex) ;;
 	*) echo "error: unknown history source: $history_source" >&2; exit 2 ;;
 esac
+script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || exit 1
 
 repo="${1:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -z "$repo" ] && { echo "not in a git repo; pass a repo path" >&2; exit 1; }
-cd "$repo" || exit 1
+cd -- "$repo" || exit 1
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: not a git repo: $repo" >&2; exit 1; }
 
 # Main worktree is the first entry; retain full paths, including spaces.
@@ -62,11 +62,12 @@ git rev-parse --verify --quiet "$base^{commit}" >/dev/null 2>&1 || { echo "error
 # PR state by branch, fetched once as [{number, state, head}] with a lowercase
 # state. Origin when its CLI can read this repo's PRs, otherwise gh. Empty when
 # neither can.
-prs=$(mktemp)
+prs=$(mktemp) || exit 1
+trap 'rm -f -- "$prs"' EXIT
 if command -v origin >/dev/null 2>&1 \
 	&& raw=$(origin pr list --author "@me" --state all --limit 1000 \
 		--json number,status,headRef 2>/dev/null); then
-	printf '%s' "$raw" | jq '[.[] | {number, state: .status, head: .headRef}]' > "$prs" 2>/dev/null
+	printf '%s' "$raw" | jq '[.[] | {number, state: (.status | ascii_downcase), head: .headRef}]' > "$prs" 2>/dev/null
 elif raw=$(gh pr list --author "@me" --state all --limit 1000 \
 	--json number,state,headRefName 2>/dev/null); then
 	printf '%s' "$raw" | jq '[.[] | {number, state: (.state | ascii_downcase), head: .headRefName}]' > "$prs" 2>/dev/null
@@ -87,7 +88,6 @@ case "$history_source" in
 	codex)
 		codex_history='{}'
 		if [ "${#worktrees[@]}" -gt 1 ]; then
-			script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 			if ! codex_history=$(node "$script_dir/codex-worktree-history.mjs" "${worktrees[@]:1}"); then
 				echo "warn: Codex history unavailable; unknown worktrees require review" >&2
 				codex_history='{}'
@@ -106,16 +106,19 @@ for wt in "${worktrees[@]:1}"; do
 	head_ts=$(git -C "$wt" log -1 --format='%ct' HEAD 2>/dev/null || echo 0)
 	age=$([ "$head_ts" -gt 0 ] 2>/dev/null && echo "$(( (now - head_ts) / 86400 ))d" || echo "?")
 
-	# Squash-merged branches are not ancestors of the base, so PR state is the
-	# real signal; merge-base only catches fast-forward/rebase merges.
-	git merge-base --is-ancestor "$head" "$base" 2>/dev/null && merged=YES || merged=no
+	# A PR associated with a branch name may describe a different commit.
+	git merge-base --is-ancestor "$head" "$base" 2>/dev/null
+	case $? in
+		0) merged=YES ;;
+		1) merged=no ;;
+		*) merged=unknown ;;
+	esac
 
-	# Distinguish real WIP (tracked edits) from disposable untracked scratch.
-	porcelain=$(git -C "$wt" status --porcelain 2>/dev/null)
-	if [ -z "$porcelain" ]; then dirty=clean
+	if ! porcelain=$(git -C "$wt" status --porcelain --untracked-files=normal 2>/dev/null); then dirty=unknown
+	elif [ -z "$porcelain" ]; then dirty=clean
 	elif printf '%s\n' "$porcelain" | grep -qv '^??'; then
 		dirty="wip:$(printf '%s\n' "$porcelain" | grep -cv '^??')"
-	else dirty="scratch:$(printf '%s\n' "$porcelain" | grep -c '^??')"; fi
+	else dirty="untracked:$(printf '%s\n' "$porcelain" | grep -c '^??')"; fi
 
 	branch=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
 	if [ -z "$branch" ]; then remote=detached
@@ -125,8 +128,10 @@ for wt in "${worktrees[@]:1}"; do
 			|| remote="ahead$(git -C "$wt" rev-list --count "origin/$branch..HEAD" 2>/dev/null)"
 	else remote=no-remote; fi
 
-	pr=$([ -n "$branch" ] && jq -r --arg b "$branch" \
-		'.[] | select(.head==$b) | "#\(.number)/\(.state)"' "$prs" 2>/dev/null | head -1)
+	pr=$([ -n "$branch" ] && jq -r --arg b "$branch" '
+		map(select(.head == $b)) |
+		(map(select(.state == "open" or .state == "draft"))[0] // .[0]) |
+		select(. != null) | "#\(.number)/\(.state)"' "$prs" 2>/dev/null)
 	[ -z "$pr" ] && pr="-"
 
 	last_ts=0; pinned_or_active=false
@@ -149,18 +154,17 @@ for wt in "${worktrees[@]:1}"; do
 	last=unknown
 	if [ "${last_ts:-0}" -gt 0 ]; then last=$(fmt_day "$last_ts" 2>/dev/null) || last=unknown; fi
 
-	case "$dirty" in wip:*) bucket=hold-wip ;; *)
-		case "$pr" in */open|*/draft) bucket=hold-open-pr ;; *)
-			if [ "$pinned_or_active" = true ]; then bucket=verify-recent-chat
-			elif [ "$last" = unknown ]; then bucket=review-history-unknown
-			elif [ $(( (now - last_ts) / 86400 )) -le 4 ]; then bucket=verify-recent-chat
-			elif [ "$merged" = YES ] || [ "$pr" != "-" ]; then bucket=safe
-			else bucket=review; fi ;;
-		esac ;;
-	esac
+	if [ "$dirty" = unknown ] || [ "$merged" = unknown ]; then bucket=review-git-unknown
+	elif [[ "$dirty" == wip:* ]]; then bucket=hold-wip
+	elif [[ "$dirty" == untracked:* ]]; then bucket=hold-untracked
+	elif [[ "$pr" == */open || "$pr" == */draft ]]; then bucket=hold-open-pr
+	elif [ "$pinned_or_active" = true ]; then bucket=verify-recent-chat
+	elif [ "$last" = unknown ]; then bucket=review-history-unknown
+	elif [ $(( (now - last_ts) / 86400 )) -le 4 ]; then bucket=verify-recent-chat
+	elif [ "$merged" = YES ]; then bucket=safe
+	else bucket=review
+	fi
 
 	printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
 		"$size" "$age" "$merged" "$dirty" "$remote" "$pr" "$last" "$bucket" "$wt"
 done | sort -t$'\t' -k1,1 -rh
-
-rm -f "$prs"

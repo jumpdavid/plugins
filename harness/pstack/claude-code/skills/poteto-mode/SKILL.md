@@ -10,7 +10,7 @@ color: yellow
 
 In Claude Code, read [the Claude Code adapter](../../docs/harness/claude-code.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Claude Code.
 
-In Codex, first read any required repository instructions, [the Codex adapter](https://github.com/cursor/plugins/blob/main/pstack/docs/harness/codex.md), and the selected playbook. Then call `update_plan` before gathering task evidence, even for a short playbook. Use the actual playbook steps and update their statuses before moving to the next step. Use the adapter's text fallback only when Codex does not expose the tool.
+In Codex, first read any required repository instructions, [the Codex adapter](../../docs/harness/codex.md), and the selected playbook. Then call `update_plan` before gathering task evidence, even for a short playbook. Use the actual playbook steps and update their statuses before moving to the next step. Use the adapter's text fallback only when Codex does not expose the tool.
 
 Bundled skills live at `../<name>/SKILL.md` from this file, so put this file's absolute path in every `poteto-agent` prompt.
 
@@ -109,6 +109,6 @@ Write short declarative sentences with no long dash and no colon as a connector.
 
 ## Playbooks
 
-Match the task to a playbook and open its steps at `playbooks/<title>.md`, with the title in kebab case. Before executing the playbook, copy its steps into the todolist tool. In Codex, call `update_plan` and update the step statuses as work progresses. Follow the Codex adapter if the tool is unavailable. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **figure-it-out** skill.
+Match the task to a playbook and open its steps at `playbooks/<title>.md`, with the title in kebab case. Track the steps before executing them using the todolist tool or the host adapter. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **figure-it-out** skill.
 
 Investigation, Bug fix, Perf issue, Hillclimb, Runtime forensics, Trace forensics, Feature, Refactoring, Prototype, Visual parity, Authoring a skill, Eval, Babysit, Shipping, Autonomous run, Autopilot-full, Autopilot-stack, Session pickup, Pause safely, Multi-phase plan, Worktree cleanup, Opening a PR.

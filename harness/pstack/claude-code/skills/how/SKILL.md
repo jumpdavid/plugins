@@ -14,7 +14,7 @@ If the scope is ambiguous, state your interpretation and explore. The user can r
 
 ## 1. Explain
 
-In Codex, follow [the delegation adapter](https://github.com/cursor/plugins/blob/main/pstack/docs/harness/codex.md#delegate-through-codex) and use one read-only delegate. In an already read-only Codex session, the native subagent inherits that sandbox. If no delegated path can enforce read-only access, report the limitation and explore the codebase yourself without editing files.
+In Codex, follow [the delegation adapter](../../docs/harness/codex.md#delegate-through-codex) and use one read-only delegate. In an already read-only Codex session, the native subagent inherits that sandbox. If no delegated path can enforce read-only access, report the limitation and explore the codebase yourself without editing files.
 
 Outside Codex, spawn one Task subagent with `subagent_type: generalPurpose` and `readonly: true`, applying the host adapter's tool mappings when provided.
 
