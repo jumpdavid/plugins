@@ -1,6 +1,6 @@
 # pstack in Codex
 
-pstack skills use Cursor names. In Codex, apply the mappings below before following the shared skills and playbooks. Resolve the paths from the installed tree. Keep the task, scope, and checks from the original workflow.
+pstack skills use Cursor names. In Codex, apply the mappings below before following the shared skills and playbooks. Resolve skill-relative links from the physical `SKILL.md` path reported by discovery or `realpath`. A project link such as `.agents/skills/pstack` points to the installed `skills/` directory, so its logical path cannot locate sibling package files such as `docs/harness/codex.md`. Keep the task, scope, and checks from the original workflow.
 
 ## Tools
 
@@ -47,6 +47,8 @@ If required coverage is missing, leave Fan out open, report what is missing, and
 | `run_in_background: true` | Omit the field. Wait for the terminal result through the available agent tool. |
 | `resume` | Follow up with the same agent when the workflow depends on state it holds. Otherwise start a fresh agent with the previous evidence. |
 | `file_attachments` | Give the agent the paths in its brief. |
+
+Use fresh context for native delegates in an ephemeral Codex session. Set `fork_context` to false when the tool exposes it, and include the task and absolute file paths in the brief. If a spawn reports that the parent has no stored rollout, retry only the missing delegate with fresh context and preserve its sandbox policy.
 
 ### Read-only delegation
 
