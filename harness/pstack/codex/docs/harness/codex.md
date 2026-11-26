@@ -84,7 +84,7 @@ Collect and inspect each diff in the parent before committing. If the host canno
 | `auto` or `inherit-parent` | Inherit the parent model and effort. A separate CLI run can use the parent's explicit values when they are known. |
 | `pstack-models.mdc` | Read `.pstack-models.json` from the repository root. Each role maps to an ordered list of seats. A seat is `"inherit-parent"` or an object with `model` and optional `effort`. The optional `budget` field records the last budget selected in setup. Dispatch reads the resulting seat values. |
 
-An unconfigured role inherits the parent. The `arena runners` and `interrogate reviewers` roles default to two independent seats. Honor the explicit count in the request. If an explicit choice is unavailable, report it and inherit for that seat. For a cross-judge, require a known different vendor. Report a skipped cross-judge when no eligible seat is available.
+An unconfigured role inherits the parent. The `arena runners` and `interrogate reviewers` roles default to two independent seats. Honor the explicit count in the request. If an explicit choice is unavailable, report it and inherit for that seat. For a cross-judge, require a known different vendor. Report a skipped cross-judge when no eligible route is available.
 
 For example:
 
@@ -94,6 +94,12 @@ For example:
   "interrogate reviewers": ["inherit-parent", "inherit-parent"]
 }
 ```
+
+### Judge anonymized Eval outputs
+
+Use an eligible native judge when available. If none is available, the operator can authorize a configured host tool named `cross_vendor_judge` for the Eval judge step. Pass the known parent and candidate vendors in `excludedVendors`. Pass the rubric, shared reference facts, and anonymous labeled answers in `packet`. Keep variant names, model IDs, transcripts, credentials, and workspace paths out of the packet.
+
+The host checks vendor eligibility before sending only the packet in a single call to its configured judge. Accept the result when the receipt identifies the actual vendor and model, the vendor is eligible, and the scores cover every label and rubric criterion. Independently check the result against the candidates. If the vendor cannot be established, no eligible route is authorized, or the result is incomplete, record the skipped or failed judge step before synthesizing.
 
 ## setup-pstack
 
