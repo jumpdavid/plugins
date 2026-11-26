@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, posix, relative } from "node:path";
+import { basename, dirname, join, posix, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -13,7 +13,7 @@ const GUIDE = "docs/guide";
 const GUIDE_IMAGES = `${GUIDE}/images`;
 const HARNESSES = [
   { tree: "claude-code", name: "Claude Code", manifests: ["plugin.json", ".claude-plugin/plugin.json"], assets: [GUIDE_IMAGES] },
-  { tree: "codex", name: "Codex", manifests: ["plugin.json"], assets: ["docs/harness/codex"] },
+  { tree: "codex", name: "Codex", manifests: ["plugin.json"], assets: ["docs/harness/codex"], runtimeOnly: true },
 ];
 const COMMAND = "node scripts/generate-pstack-harness-trees.mjs";
 const GITHUB = "https://github.com/cursor/plugins";
@@ -25,7 +25,7 @@ This folder is generated from \`pstack/skills\`, \`pstack/agents\`, \`pstack/${G
 
 Cursor uses \`pstack/\` directly. Claude Code installs \`claude-code/\` through its marketplace. For Codex, link this checkout's \`harness/pstack/codex/skills\` to \`.agents/skills/pstack\` in the target project, then invoke \`$poteto-mode\`. Read [the Codex adapter](codex/docs/harness/codex.md) for setup.
 
-Each generated tree includes its own adapter and the files it uses. A relative link to an omitted source asset points to that asset on GitHub \`main\`.
+Each generated tree includes its own adapter and the files it uses. The Codex package ships runtime skill files. Its tests and compile-only fixtures remain in the source tree. A relative link to an omitted source asset points to that asset on GitHub \`main\`.
 
 After editing those sources, run \`${COMMAND}\` from the repository root and commit the result.
 `;
@@ -122,10 +122,16 @@ function has(files, path) {
   return files.has(path) || [...files.keys()].some((key) => key.startsWith(`${path}/`));
 }
 
-function render({ tree, name, assets, manifests }) {
+function isSkillTest(path) {
+  const directories = relative(SKILLS, dirname(path)).split(sep);
+  return directories.some((dir) => dir === "test" || dir === "tests")
+    || /\.(?:test(?:-helper)?|compile)\.[cm]?[jt]sx?$/.test(basename(path));
+}
+
+function render({ tree, name, assets, manifests, runtimeOnly = false }) {
   const adapter = `docs/harness/${tree}.md`;
   const copies = [
-    ...walk(SKILLS),
+    ...walk(SKILLS).filter((path) => !runtimeOnly || !isSkillTest(path)),
     ...walk(join(PSTACK, "agents")),
     ...walk(join(PSTACK, GUIDE)).filter((path) => path.endsWith(".md")),
     join(PSTACK, adapter),
