@@ -35,7 +35,7 @@ For a direct call, use the following phases:
 | --- | --- |
 | `arena` | Frame, Fan out, Cross-judge, Pick, Graft, Verify. Start Cross-judge before evaluating vendor availability. Record the result or the reason it was skipped before starting Pick. |
 | `swarm` | Frame, Fan out, Aggregate, Report. Complete Fan out after collecting the requested coverage. |
-| `interrogate` | Frame, Fan out, Verify, Report. Complete Frame and start Fan out before the first reviewer spawn. After all required reviewers return, start Verify before replaying their commands. Start Report before preparing the final findings, then complete it before sending them. |
+| `interrogate` | Frame, Fan out, Verify, Report. Complete Frame and start Fan out before the first reviewer spawn. After all required reviewers return, complete Fan out and start Verify. Run the parent's independent evidence checks and command reruns during Verify. Start Report before preparing the final findings, then complete it before sending them. |
 
 If required coverage is missing, leave Fan out open, report what is missing, and end the review. Resume when the required coverage is available. App Server reports real plan updates as `turn/plan/updated` events.
 
