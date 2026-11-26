@@ -58,6 +58,8 @@ The review needs a sandbox that enforces read-only access. A native subagent can
 codex --ask-for-approval never exec --ephemeral --sandbox read-only -C "$checkout" "$brief"
 ```
 
+A trusted MCP launcher can offer these separate reviews to a standard CLI session. Limit the review runs to the MCP servers needed for the task, and use `enabled_tools` to select the allowed tools on each server.
+
 When a review is read-only, give every reviewer the current checkout, including local changes. Keep repro writes in a disposable location when the scope permits them. If neither native nor externally launched delegates can enforce read-only access, report the missing coverage. For `how`, a direct read-only investigation can still answer the user. For `interrogate`, keep Fan out open and end the review.
 
 ### Independent writers
@@ -104,10 +106,26 @@ For example:
 
 | Cursor | Codex |
 | --- | --- |
-| `.cursor/skills/` and `~/.cursor/skills/` | Install the generated `harness/pstack/codex/skills` in the target project's `.agents/skills/pstack`. Write new project skills in `.agents/skills/`. |
+| `.cursor/skills/` and `~/.cursor/skills/` | Install the generated `harness/pstack/codex/skills` in the target project's `.agents/skills/pstack`. Write project-owned skills in `.agents/skills/` using [a scoped authoring turn](#write-a-project-skill). |
 | `~/.cursor/plugins/` and `.cursor-plugin/plugin.json` | Find the skills through Codex discovery. Resolve role briefs, guides, and runtime files from the generated tree next to `skills/`. |
 | `.cursor/rules/` and always-applied rules | Follow project `AGENTS.md` and Codex configuration. Use the repository-root JSON file for pstack model roles. |
 | `agent-transcripts` in the workspace | Use the Codex chat list and thread reader for the current project. Check active and pinned chats before worktree cleanup. If chat history is unavailable, report the gap. |
+
+### Write a project skill
+
+Codex's workspace permissions protect `.agents/` by default. For generation or maintenance, use a host-selected authoring profile that grants write access to the named project skill. Keep the installed pstack package and other skills outside the write scope. Add a specific evidence or scratch directory when the verifier needs one.
+
+```toml
+[permissions.pstack-skill-edit]
+extends = ":read-only"
+
+[permissions.pstack-skill-edit.filesystem.":workspace_roots"]
+".agents/skills/verify-example" = "write"
+```
+
+Select the profile for the authoring session with `codex -c 'default_permissions="pstack-skill-edit"'`. An App Server host can also grant the absolute target directory as a writable root for one turn. When a workflow calls for read-only reviewers before applying changes, keep the review turn read-only and grant the target only for the follow-up edit.
+
+If the host cannot grant the target, prepare the complete skill in a writable staging directory for trusted installation. Treat it as a draft until the final path is installed and a new session discovers and runs the skill.
 
 ## Cursor-only features
 
