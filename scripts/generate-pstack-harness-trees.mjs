@@ -10,12 +10,14 @@ const SKILLS = join(PSTACK, "skills");
 // Outside pstack/ so Cursor, which copies the whole plugin folder, does not install this tree too.
 const OUT = join(ROOT, "harness", "pstack");
 const GUIDE = "docs/guide";
+const GUIDE_IMAGES = `${GUIDE}/images`;
 const HARNESSES = [
-  { tree: "claude-code", name: "Claude Code", manifests: ["plugin.json", ".claude-plugin/plugin.json"], assets: [] },
+  { tree: "claude-code", name: "Claude Code", manifests: ["plugin.json", ".claude-plugin/plugin.json"], assets: [GUIDE_IMAGES] },
   { tree: "codex", name: "Codex", manifests: ["plugin.json"], assets: ["docs/harness/codex"] },
 ];
 const COMMAND = "node scripts/generate-pstack-harness-trees.mjs";
 const GITHUB = "https://github.com/cursor/plugins";
+const RAW_GITHUB = "https://raw.githubusercontent.com/cursor/plugins/main";
 const LINK = /\]\(([^)\s]+)\)/g;
 const README = `# pstack harness tree
 
@@ -125,7 +127,7 @@ function render({ tree, name, assets, manifests }) {
   const copies = [
     ...walk(SKILLS),
     ...walk(join(PSTACK, "agents")),
-    ...walk(join(PSTACK, GUIDE)),
+    ...walk(join(PSTACK, GUIDE)).filter((path) => path.endsWith(".md")),
     join(PSTACK, adapter),
     ...assets.flatMap((dir) => walk(join(PSTACK, dir))),
     join(PSTACK, "README.md"),
@@ -147,7 +149,10 @@ function render({ tree, name, assets, manifests }) {
       const target = resolve(path, href);
       if (!target || target.split("/")[0] === ".." || has(files, target)) return link;
       const kind = statSync(join(PSTACK, target)).isDirectory() ? "tree" : "blob";
-      return `](${GITHUB}/${kind}/main/pstack/${target}${href.slice(href.search(/[#?]|$/))})`;
+      const upstream = kind === "blob" && target.startsWith(`${GUIDE_IMAGES}/`)
+        ? RAW_GITHUB
+        : `${GITHUB}/${kind}/main`;
+      return `](${upstream}/pstack/${target}${href.slice(href.search(/[#?]|$/))})`;
     });
     entry.bytes = Buffer.from(text);
   }
