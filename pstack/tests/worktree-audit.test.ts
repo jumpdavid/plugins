@@ -35,6 +35,16 @@ test("worktree audit requires known history and uses scoped, paginated Codex met
   writeFileSync(join(bin, "codex"), `#!/usr/bin/env node
 const assert = require("node:assert/strict");
 const { createInterface } = require("node:readline");
+if (process.argv[2] === "debug") {
+  assert.deepEqual(process.argv.slice(2), ["debug", "models"]);
+  const models = [
+    { slug: "first-model", visibility: "list", supported_reasoning_levels: [{ effort: "low" }] },
+    { slug: "hidden-model", visibility: "hide", supported_reasoning_levels: [{ effort: "high" }] },
+    { slug: "second-model", visibility: "list", supported_reasoning_levels: [{ effort: process.env.PSTACK_INVALID_EFFORT ? null : "high" }] },
+  ];
+  process.stdout.write(JSON.stringify({ models }));
+  process.exit(0);
+}
 assert.deepEqual(process.argv.slice(2), ["app-server", "--stdio"]);
 const paths = JSON.parse(process.env.PSTACK_AUDIT_PATHS);
 const [recent, old, pinned, , closed, untracked, missing] = paths;
@@ -45,11 +55,6 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   const send = (result) => console.log(JSON.stringify({ id, result }));
   if (method === "initialize") return send({});
   if (method === "initialized") return;
-  if (method === "model/list") {
-    const model = params.cursor === null ? "first-model" : "second-model";
-    const nextCursor = params.cursor === null || process.env.PSTACK_REPEAT_CURSOR ? "models-2" : null;
-    return send({ data: [{ model, supportedReasoningEfforts: [{ reasoningEffort: "low" }] }], nextCursor });
-  }
   assert.equal(method, "thread/list");
   assert.deepEqual(new Set(params.cwd), new Set(paths));
   assert.equal(params.currentAccountOnly, true);
@@ -64,7 +69,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   });
   if (params.cursor === null) return send({ data: [{ cwd: recent, updatedAt: now }], nextCursor: "page-2" });
   assert.equal(params.cursor, "page-2");
-  send({ data: [{ cwd: pinned, updatedAt: weekAgo, section: { name: "Pinned" } }], nextCursor: null });
+  send({ data: [{ cwd: pinned, updatedAt: weekAgo, section: { name: "Pinned" } }], nextCursor: process.env.PSTACK_REPEAT_CURSOR ? "page-2" : null });
 });
 `, { mode: 0o755 });
 
@@ -98,17 +103,25 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     assert.notEqual(row.bucket, "safe");
   }
 
-  const catalog = spawnSync(process.execPath, [models], { env, encoding: "utf8" });
-  assert.equal(catalog.status, 0, catalog.stderr);
-  assert.deepEqual(JSON.parse(catalog.stdout), [
-    { model: "first-model", efforts: ["low"] },
-    { model: "second-model", efforts: ["low"] },
-  ]);
-  const repeated = spawnSync(process.execPath, [models], {
+  const repeated = spawnSync(process.execPath, [history, ...paths], {
     env: { ...env, PSTACK_REPEAT_CURSOR: "1" },
     encoding: "utf8",
   });
   assert.equal(repeated.status, 1);
   assert.equal(repeated.stdout, "");
-  assert.match(repeated.stderr, /Invalid model\/list cursor/);
+  assert.match(repeated.stderr, /Invalid thread\/list cursor/);
+
+  const catalog = spawnSync(process.execPath, [models], { env, encoding: "utf8" });
+  assert.equal(catalog.status, 0, catalog.stderr);
+  assert.deepEqual(JSON.parse(catalog.stdout), [
+    { model: "first-model", efforts: ["low"] },
+    { model: "second-model", efforts: ["high"] },
+  ]);
+  const malformed = spawnSync(process.execPath, [models], {
+    env: { ...env, PSTACK_INVALID_EFFORT: "1" },
+    encoding: "utf8",
+  });
+  assert.equal(malformed.status, 1);
+  assert.equal(malformed.stdout, "");
+  assert.match(malformed.stderr, /Invalid Codex reasoning effort/);
 });
