@@ -115,10 +115,22 @@ For example:
 | --- | --- |
 | Cursor Automations, webhooks, and Bugbot setup | These integrations require a separate migration. Record the skipped step. Process existing GitHub review threads with the forge commands in the playbook. |
 | A built-in PR tool | Use the forge command the step provides, such as `gh pr create`. |
-| `/loop` | Keep the current task active and run the named check until its exit condition is met. Use the watcher command when the playbook provides one. |
+| `/loop` | Keep the current task active and run the named check until its exit condition is met. Use the watcher command when the playbook provides one. For a follow-up after disconnect, use [durable follow-up](#durable-follow-up). |
 | `/create-skill` | Use `$skill-creator` when available. |
 | `/deslop` | Read the bundled `cursor-team-kit/skills/deslop/SKILL.md` if available. Otherwise review the actual diff for redundant comments, unnecessary guards, type-check bypasses, avoidable nesting, and departures from surrounding code. Apply behavior-preserving edits and run `git diff --check` and the relevant tests before committing. |
 | `control-ui`, `control-cli` | Run the behavior through the project's UI driver, the browser or computer tool, or the actual CLI entry point. For visual parity capture the baseline and target on the same surface and state. Require equal dimensions and zero decoded pixel difference. Keep the captures and comparator output as evidence. |
+
+### Durable follow-up
+
+A trusted host can enqueue a follow-up to a saved Codex thread:
+
+```sh
+codex queue --resume --thread "$thread" --message "$message"
+```
+
+This uses a running local daemon. To target an App Server endpoint supplied by the host, add `--remote "$endpoint"`. Use the original thread ID and include the verified checkpoint and next action in the message.
+
+Record the enqueue and the new turn's terminal result separately. A successful CLI exit confirms the enqueue. If it warns that resume failed, check whether the named thread actually ran the follow-up. Recover from the last verified checkpoint after an interrupted turn. A watcher or scheduler owns the event that sends the follow-up.
 
 ### Worktree cleanup
 
