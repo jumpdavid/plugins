@@ -203,6 +203,11 @@ export type MergeBlocker =
     };
 export type QueryFailure =
   | {
+      readonly kind: "head-changed";
+      readonly retryable: true;
+      readonly detail: string;
+    }
+  | {
       readonly kind: "json-parse";
       readonly retryable: true;
       readonly detail: string;
@@ -232,7 +237,7 @@ export type QueryFailure =
     };
 /**
  * `frontier` names the lowest unmerged PR that is actually waiting, and
- * `pending` is that PR's checks only. Pooling every row's pending under the
+ * its reason only describes that PR. Pooling every row's pending under the
  * bottom PR's number misattributed upstack waits to the frontier.
  *
  * This decision serves single and `--stack` mode. Queued mode deliberately
@@ -241,10 +246,13 @@ export type QueryFailure =
  * checks do not block the frontier's merge. That is the Python watcher's
  * contract, not an attribution bug.
  */
+export type PendingWork =
+  | { readonly kind: "pending-checks"; readonly pending: NonEmpty<PendingCheck> }
+  | { readonly kind: "review-automation" };
 export interface WaitingDecision {
   readonly kind: "waiting";
   readonly frontier: PrContext;
-  readonly pending: NonEmpty<PendingCheck>;
+  readonly reason: PendingWork;
 }
 export type PrDecision =
   | { readonly kind: "blocker"; readonly blocker: MergeBlocker }
@@ -286,10 +294,7 @@ export type ProgressVerdict =
   | (Progress<"WAITING"> & {
       readonly frontier: PrContext;
       readonly reason:
-        | {
-            readonly kind: "pending-checks";
-            readonly pending: NonEmpty<PendingCheck>;
-          }
+        | PendingWork
         | { readonly kind: "merge-queue"; readonly unmergedCount: number };
     })
   | (Progress<"ADVANCE", "queued-stack"> & {
@@ -333,10 +338,7 @@ export type BlockerVerdict =
     });
 export type TimeoutVerdict = Terminal<"TIMEOUT", 5> & {
   readonly reason:
-    | {
-        readonly kind: "pending-checks";
-        readonly pending: NonEmpty<PendingCheck>;
-      }
+    | PendingWork
     | { readonly kind: "status-unavailable"; readonly failure: QueryFailure }
     | {
         readonly kind: "queued-stack";
@@ -403,6 +405,7 @@ export interface GitHubReader {
     context: PrContext,
     after: string | null
   ): Promise<ReviewThreadPage>;
+  codexReviewRunning(context: PrContext, head: string): Promise<boolean>;
   commitRollups(context: PrContext): Promise<readonly CommitRollup[]>;
 }
 export interface PollingOptions {

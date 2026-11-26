@@ -9,6 +9,7 @@ import {
   buildReviewThreads,
   mapRollupNode,
   orderStack,
+  parseCodexReviewRunning,
   parseFastCheck,
   parsePullRequest,
   parseReviewThreadPage,
@@ -29,6 +30,28 @@ const context = {
   repo: "repo",
   number: parsePrNumber(42),
 };
+
+it("reads the latest Codex bot summary for the exact head across comment pages", () => {
+  const user = { type: "Bot", login: "chatgpt-codex-connector[bot]" };
+  const summary = (code: object, security: object = {}) => ({
+    user,
+    body: `<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 ${JSON.stringify({
+      code_review: code,
+      security_review: security,
+    })} -->`,
+  });
+  const running = summary({ commit_sha: "head", status: "running" });
+  const completed = summary({ commit_sha: "head", status: "completed" });
+  const spoof = { ...running, user: { type: "User", login: "someone" } };
+  const otherBotComment = { ...running, body: running.body.split("\n")[1] };
+  expect(parseCodexReviewRunning([[running], [spoof]], "head")).toBe(true);
+  expect(parseCodexReviewRunning([[running], [completed, spoof]], "head")).toBe(false);
+  expect(parseCodexReviewRunning([[running]], "new-head")).toBe(false);
+  expect(parseCodexReviewRunning([[spoof]], "head")).toBe(false);
+  expect(parseCodexReviewRunning([[otherBotComment]], "head")).toBe(false);
+  const security = summary({}, { commit_sha: "head", status: "running" });
+  expect(parseCodexReviewRunning([[security]], "head")).toBe(true);
+});
 
 describe("checks fallback chain", () => {
   it("uses a non-empty fast-path result without a rollup query", async () => {

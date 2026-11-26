@@ -121,6 +121,10 @@ export function fakeReader(
         endCursor: null,
       };
     },
+    async codexReviewRunning() {
+      calls.push("codexReviewRunning");
+      return false;
+    },
     async commitRollups() {
       calls.push("commitRollups");
       return options.commitRollups ?? [{ oid: "head", state: "SUCCESS" }];

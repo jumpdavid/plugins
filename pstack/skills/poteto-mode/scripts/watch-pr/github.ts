@@ -436,6 +436,35 @@ export function parsePullRequest(
     isDraft: object.isDraft,
   };
 }
+export function parseCodexReviewRunning(value: unknown, head: string): boolean {
+  const pages = list(value, "PR conversation comment pages");
+  for (const page of pages.slice().reverse()) {
+    for (const item of list(page, "PR conversation comments").slice().reverse()) {
+      const comment = record(item, "PR conversation comment");
+      if (
+        !isRecord(comment.user) ||
+        comment.user.type !== "Bot" ||
+        comment.user.login !== "chatgpt-codex-connector[bot]"
+      ) continue;
+      const body = string(comment.body, "Codex conversation comment body");
+      if (!body.startsWith("<!-- codex-pull-request-review-summary -->")) continue;
+      const state = body.match(/^<!-- codex-review-state:v1 (.+) -->$/m);
+      if (!state) continue;
+      const summary = record(
+        parseJson(state[1], "Codex review state"),
+        "Codex review state"
+      );
+      return [summary.code_review, summary.security_review].some(
+        (review) =>
+          isRecord(review) &&
+          review.commit_sha === head &&
+          review.status === "running"
+      );
+    }
+  }
+  return false;
+}
+
 function graphqlArgs(
   query: string,
   context: T.PrContext
@@ -583,6 +612,16 @@ export class GhGitHubReader implements T.GitHubReader {
     const argv = graphqlArgs(REVIEW_THREADS_QUERY, context);
     if (after !== null) argv.push("-f", `after=${after}`);
     return parseReviewThreadPage(await runJson(argv));
+  }
+  async codexReviewRunning(context: T.PrContext, head: string): Promise<boolean> {
+    const comments = await runJson([
+      "gh",
+      "api",
+      "--paginate",
+      "--slurp",
+      `repos/${context.owner}/${context.repo}/issues/${context.number}/comments?per_page=100`,
+    ]);
+    return parseCodexReviewRunning(comments, head);
   }
   async commitRollups(
     context: T.PrContext

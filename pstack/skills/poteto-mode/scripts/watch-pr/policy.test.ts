@@ -107,6 +107,7 @@ describe("snapshot query planning", () => {
     expect(snapshot.ci.kind).toBe("ci-pending");
     expect(reader.calls).toEqual([
       "pullRequest",
+      "codexReviewRunning",
       "reviewThreadPage:null",
       "checksFastPath",
     ]);
@@ -194,7 +195,7 @@ it("attributes a stack wait to the PR whose checks are pending, not the bottom",
   expect(decision).toMatchObject({
     kind: "waiting",
     frontier: { number: 21 },
-    pending: [{ name: "upstack-build" }],
+    reason: { kind: "pending-checks", pending: [{ name: "upstack-build" }] },
   });
 });
 
@@ -220,6 +221,80 @@ it("waits on a draft while checks are pending, then reports the draft gate", asy
     kind: "blocker",
     blocker: { kind: "merge-gate", reason: "draft-pr" },
   });
+});
+
+it("waits for a Codex review after CI passes, then rechecks before returning READY", async () => {
+  let polls = 0;
+  let now = 0;
+  const emitted: ProgressVerdict[] = [];
+  const reader = {
+    ...fakeReader({ facts: { isDraft: true } }),
+    async codexReviewRunning() {
+      polls += 1;
+      return polls === 1;
+    },
+  };
+  const verdict = await runSimple({
+    dependencies: {
+      reader,
+      clock: {
+        now: () => now,
+        observedAt: () => "2026-11-26T15:01:24Z",
+        async sleep(seconds) { now += seconds; },
+      },
+      emit: (event) => emitted.push(event),
+    },
+    contexts: [context(1)],
+    mode: "single",
+    statusOnly: false,
+    options: { ...options, allowDraft: true },
+  });
+  expect(emitted).toMatchObject([
+    { kind: "WAITING", reason: { kind: "review-automation" } },
+  ]);
+  expect(polls).toBe(2);
+  expect(verdict).toMatchObject({ kind: "READY", terminal: true });
+});
+
+it("rechecks the new head when the review starts during a poll", async () => {
+  const starting = fakeReader({ facts: { headRefOid: "old-head" } });
+  const advanced = fakeReader({ facts: { headRefOid: "new-head" } });
+  let headReads = 0;
+  let reviewReads = 0;
+  let now = 0;
+  const emitted: ProgressVerdict[] = [];
+  const reader: GitHubReader = {
+    ...starting,
+    async pullRequest(pr) {
+      headReads += 1;
+      return (headReads === 1 ? starting : advanced).pullRequest(pr);
+    },
+    async codexReviewRunning(_pr, head) {
+      if (head !== "new-head") return false;
+      reviewReads += 1;
+      return reviewReads === 1;
+    },
+  };
+  const verdict = await runSimple({
+    dependencies: {
+      reader,
+      clock: {
+        now: () => now,
+        observedAt: () => "2026-11-26T15:01:24Z",
+        async sleep(seconds) { now += seconds; },
+      },
+      emit: (event) => emitted.push(event),
+    },
+    contexts: [context(1)],
+    mode: "single",
+    statusOnly: false,
+    options,
+  });
+  expect(emitted).toMatchObject([
+    { kind: "RETRY", failure: { kind: "head-changed" } },
+    { kind: "WAITING", reason: { kind: "review-automation" } },
+  ]);
+  expect(verdict).toMatchObject({ kind: "READY", terminal: true });
 });
 
 describe("queued-stack cadence", () => {
