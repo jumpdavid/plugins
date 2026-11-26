@@ -97,7 +97,11 @@ For example:
 
 ### Judge anonymized Eval outputs
 
-Use an eligible native judge when available. If none is available, the operator can authorize a configured host tool named `cross_vendor_judge` for the Eval judge step. Pass the known parent and candidate vendors in `excludedVendors`. Pass the rubric, shared reference facts, and anonymous labeled answers in `packet`. Keep variant names, model IDs, transcripts, credentials, and workspace paths out of the packet.
+For a blinded Eval, have the host start each candidate in a fresh session with a separate named permission profile. Grant read access to `":minimal"` runtime paths and scope the task's file permissions to that candidate's absolute project root. Keep the other candidates and judging material outside those roots. A parent using broad read-only access cannot supply this boundary to its native delegates.
+
+In App Server, select the profile with `thread/start.permissions`. Before kickoff, verify that the same profile can read the candidate's inputs and rejects reads of the other candidates and the rubric. If the host cannot enforce those reads, report filesystem isolation as unverified.
+
+Use an eligible native judge when available. If none is available, the operator can authorize a configured host tool named `cross_vendor_judge` for the Eval judge step. Pass the parent and candidate vendors in `excludedVendors` using the host's canonical vendor IDs. Pass the rubric, shared reference facts, and anonymous labeled answers in `packet`. Keep variant names, model IDs, transcripts, credentials, and workspace paths out of the packet.
 
 The host checks vendor eligibility before sending only the packet in a single call to its configured judge. Accept the result when the receipt identifies the actual vendor and model, the vendor is eligible, and the scores cover every label and rubric criterion. Independently check the result against the candidates. If the vendor cannot be established, no eligible route is authorized, or the result is incomplete, record the skipped or failed judge step before synthesizing.
 
