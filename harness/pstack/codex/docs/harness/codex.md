@@ -7,10 +7,14 @@ pstack skills use Cursor names. In Codex, apply the mappings below before follow
 | Cursor | Codex |
 | --- | --- |
 | `Task` | Spawn native Codex subagents using the available tool schema. Dispatch independent agents before waiting. Count a delegate after it returns usable evidence. If a call is rejected, check the tool schema and correct the call for missing seats. |
-| `AskQuestion` | Use the host's structured user-input tool when available. Otherwise ask in chat. |
+| `AskQuestion` | Use the host's structured user-input tool when available. Follow [Collect a user choice](#collect-a-user-choice). |
 | Open a todolist or write playbook steps to it | Use `update_plan` in Default mode. Follow [Plan tracking](#plan-tracking). |
 | Run another pstack skill (`/name` or “the **name** skill”) | Read the installed `skills/<name>/SKILL.md` and follow it with this adapter. Use `$<name>` for the project-skills installation. |
 | `Grep`, `Glob` | Use `rg` and `rg --files` when the host exposes a shell. |
+
+### Collect a user choice
+
+Call the host's structured input tool, such as `request_user_input`, when available. Treat the native question as open only after the host accepts the tool call. If the tool is unavailable or the call fails to open a question, ask the same choices in chat and end the turn so the user can reply. Apply the choice only after receiving an answer. If the user cancels, leave the proposed changes unapplied.
 
 ### Plan tracking
 
