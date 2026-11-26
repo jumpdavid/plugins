@@ -152,6 +152,8 @@ Record the enqueue and the new turn's terminal result separately. A successful C
 
 ### Worktree cleanup
 
-Use [the shared worktree audit](../../skills/poteto-mode/scripts/worktree-audit.sh) with `--history-command` set to the absolute installed path of [the Codex history reader](codex/codex-worktree-history.mjs). The reader queries scoped chat metadata for the exact Git worktree paths. Check pinned and active chats separately, including chats that operate on the worktree from another working directory.
+Use [the shared worktree audit](../../skills/poteto-mode/scripts/worktree-audit.sh) with `--history-command` set to the absolute installed path of [the Codex history reader](codex/codex-worktree-history.mjs). The reader scopes the history query to the current account and registered Git worktrees, including the main checkout. It uses the saved command working directories of recent, pinned, or active threads to recognize commands run in another worktree. It returns activity metadata for the worktrees being audited.
+
+Review active and pinned chats separately before cleanup. The audit can identify a saved command whose working directory is in the worktree. A command still running, a command run elsewhere with an absolute file argument, or a temporary chat with no saved history require separate evidence. Use a trusted host to run the audit when the current command sandbox cannot start the history reader.
 
 Only a clean checkout whose commit is reachable from the selected base is eligible for cleanup. Hold unknown history, unknown Git state, and untracked or modified work. Use `git worktree remove <path>` for confirmed candidates. If Git refuses, keep the worktree and report the reason.

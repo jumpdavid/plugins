@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { isAbsolute } from "node:path";
+import { execFileSync } from "node:child_process";
+import { isAbsolute, relative, sep } from "node:path";
 import { listPages, withAppServer } from "./codex-app-server.mjs";
 
 const paths = process.argv.slice(2);
@@ -10,11 +11,31 @@ if (updates.size === 0 || paths.some((path) => !isAbsolute(path))) {
   process.exit(2);
 }
 
+function record(path, timestamp, hold) {
+  const previous = updates.get(path);
+  updates.set(path, {
+    timestamp: Math.max(timestamp, previous?.timestamp ?? 0),
+    hold: Boolean(hold || previous?.hold),
+  });
+}
+
+function isInside(root, cwd) {
+  const subpath = relative(root, cwd);
+  return subpath !== ".." && !subpath.startsWith(".." + sep) && !isAbsolute(subpath);
+}
+
 try {
+  const inventory = execFileSync("git", ["worktree", "list", "--porcelain", "-z"], { encoding: "utf8" });
+  const projectWorktrees = new Set(inventory.split("\0")
+    .filter(field => field.startsWith("worktree ")).map(field => field.slice("worktree ".length)));
+  if (paths.some(path => !projectWorktrees.has(path))) {
+    throw new Error("Expected worktree paths from the current Git repository.");
+  }
+  const recentSince = Math.floor(Date.now() / 1000) - 5 * 86400;
   await withAppServer("pstack-worktree-audit", async (request) => {
     for (const archived of [false, true]) {
       const params = {
-        cwd: paths,
+        cwd: [...projectWorktrees],
         archived,
         currentAccountOnly: true,
         useStateDbOnly: true,
@@ -22,15 +43,24 @@ try {
         sourceKinds: ["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther", "unknown"],
       };
       for await (const thread of listPages(request, "thread/list", params)) {
-        if (!updates.has(thread?.cwd)) throw new Error("Unscoped thread/list response.");
+        if (!projectWorktrees.has(thread?.cwd)) throw new Error("Unscoped thread/list response.");
         if (!Number.isInteger(thread.updatedAt) || thread.updatedAt <= 0) {
           throw new Error("Invalid thread update time.");
         }
-        const previous = updates.get(thread.cwd);
-        updates.set(thread.cwd, {
-          timestamp: Math.max(thread.updatedAt, previous?.timestamp ?? 0),
-          hold: Boolean(previous?.hold || thread.status?.type === "active" || thread.section?.name === "Pinned"),
-        });
+        const hold = thread.status?.type === "active" || thread.section?.name === "Pinned";
+        if (updates.has(thread.cwd)) record(thread.cwd, thread.updatedAt, hold);
+        if (!hold && thread.updatedAt <= recentSince) continue;
+
+        if (typeof thread.id !== "string" || !thread.id) throw new Error("Missing scoped thread ID.");
+        for await (const { item } of listPages(request, "thread/items/list", { threadId: thread.id, limit: 100 })) {
+          if (item?.type !== "commandExecution") continue;
+          if (typeof item.cwd !== "string" || !isAbsolute(item.cwd)) {
+            throw new Error("Missing command working directory.");
+          }
+          for (const path of paths) {
+            if (isInside(path, item.cwd)) record(path, thread.updatedAt, hold);
+          }
+        }
       }
     }
   });

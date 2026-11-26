@@ -15,8 +15,8 @@ test("worktree audit requires known history and uses scoped, paginated Codex met
   ctx.after(() => rmSync(tmp, { recursive: true, force: true }));
   const repo = join(tmp, "repo");
   const bin = join(tmp, "bin");
-  const paths = ["recent tree", "old", "pinned", "absent", "closed", "untracked", "missing"].map((name) => join(tmp, name));
-  const [recent, old, pinned, absent, closed, untracked, missing] = paths;
+  const paths = ["recent tree", "old", "pinned", "absent", "closed", "untracked", "missing", "cross"].map((name) => join(tmp, name));
+  const [recent, old, pinned, absent, closed, untracked, missing, cross] = paths;
 
   mkdirSync(bin);
   writeFileSync(join(bin, "origin"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
@@ -47,7 +47,8 @@ if (process.argv[2] === "debug") {
 }
 assert.deepEqual(process.argv.slice(2), ["app-server", "--stdio"]);
 const paths = JSON.parse(process.env.PSTACK_AUDIT_PATHS);
-const [recent, old, pinned, , closed, untracked, missing] = paths;
+const [recent, old, pinned, absent, closed, untracked, missing, cross] = paths;
+const repo = process.env.PSTACK_AUDIT_REPO;
 const now = Math.floor(Date.now() / 1000);
 const weekAgo = now - 7 * 86400;
 createInterface({ input: process.stdin }).on("line", (line) => {
@@ -55,8 +56,17 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   const send = (result) => console.log(JSON.stringify({ id, result }));
   if (method === "initialize") return send({});
   if (method === "initialized") return;
+  if (method === "thread/items/list") {
+    assert(["main-thread", "recent-thread", "pinned-thread"].includes(params.threadId));
+    if (params.threadId !== "main-thread") return send({ data: [], nextCursor: null });
+    return send({ data: [
+      { item: { type: "commandExecution", cwd: process.env.PSTACK_INVALID_ITEM_CWD ? null : cross + "/src" } },
+      { item: { type: "commandExecution", cwd: absent + "-neighbor" } },
+      { item: { type: "userMessage", content: [{ type: "text", text: absent }] } },
+    ], nextCursor: null });
+  }
   assert.equal(method, "thread/list");
-  assert.deepEqual(new Set(params.cwd), new Set(paths));
+  assert.deepEqual(new Set(params.cwd), new Set([repo, ...paths]));
   assert.equal(params.currentAccountOnly, true);
   assert.equal(params.useStateDbOnly, true);
   assert(params.sourceKinds.includes("appServer"));
@@ -64,16 +74,19 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     return send({ data: [{ cwd: "/other/project", updatedAt: now }], nextCursor: null });
   }
   if (params.archived) return send({
-    data: [old, closed, untracked, missing].map(cwd => ({ cwd, updatedAt: weekAgo })),
+    data: [old, closed, untracked, missing, cross].map(cwd => ({ cwd, updatedAt: weekAgo })),
     nextCursor: null,
   });
-  if (params.cursor === null) return send({ data: [{ cwd: recent, updatedAt: now }], nextCursor: "page-2" });
+  if (params.cursor === null) return send({ data: [
+    { id: "recent-thread", cwd: recent, updatedAt: now },
+    { id: "main-thread", cwd: repo, updatedAt: now },
+  ], nextCursor: "page-2" });
   assert.equal(params.cursor, "page-2");
-  send({ data: [{ cwd: pinned, updatedAt: weekAgo, section: { name: "Pinned" } }], nextCursor: process.env.PSTACK_REPEAT_CURSOR ? "page-2" : null });
+  send({ data: [{ id: "pinned-thread", cwd: pinned, updatedAt: weekAgo, section: { name: "Pinned" } }], nextCursor: process.env.PSTACK_REPEAT_CURSOR ? "page-2" : null });
 });
 `, { mode: 0o755 });
 
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}`, PSTACK_AUDIT_PATHS: JSON.stringify(paths) };
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}`, PSTACK_AUDIT_PATHS: JSON.stringify(paths), PSTACK_AUDIT_REPO: repo };
   const run = (unscoped: string) => {
     const output = execFileSync("bash", [relative(tmp, audit), "--history-command", relative(tmp, history), "-b", "HEAD", repo], {
       cwd: tmp,
@@ -90,6 +103,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   const rows = run("0");
   assert.equal(rows.get(recent)?.bucket, "verify-recent-chat");
   assert.equal(rows.get(pinned)?.bucket, "verify-recent-chat");
+  assert.equal(rows.get(cross)?.bucket, "verify-recent-chat");
   assert.equal(rows.get(old)?.bucket, "safe");
   assert.deepEqual(rows.get(absent), { lastChat: "unknown", bucket: "review-history-unknown" });
   assert.equal(rows.get(closed)?.bucket, "review");
@@ -105,11 +119,21 @@ createInterface({ input: process.stdin }).on("line", (line) => {
 
   const repeated = spawnSync(process.execPath, [history, ...paths], {
     env: { ...env, PSTACK_REPEAT_CURSOR: "1" },
+    cwd: repo,
     encoding: "utf8",
   });
   assert.equal(repeated.status, 1);
   assert.equal(repeated.stdout, "");
   assert.match(repeated.stderr, /Invalid thread\/list cursor/);
+
+  const missingCwd = spawnSync(process.execPath, [history, ...paths], {
+    env: { ...env, PSTACK_INVALID_ITEM_CWD: "1" },
+    cwd: repo,
+    encoding: "utf8",
+  });
+  assert.equal(missingCwd.status, 1);
+  assert.equal(missingCwd.stdout, "");
+  assert.match(missingCwd.stderr, /Missing command working directory/);
 
   const catalog = spawnSync(process.execPath, [models], { env, encoding: "utf8" });
   assert.equal(catalog.status, 0, catalog.stderr);
