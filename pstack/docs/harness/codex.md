@@ -21,7 +21,9 @@ Enable the Codex plan tool in user or trusted project configuration, then start 
 enabled = true
 ```
 
-Read the adapter and the selected playbook or skill phases first. For a direct invocation, the first workflow action is `update_plan`. Call it before starting the first step or gathering evidence. Use the playbook's steps or the exact phase labels in the table below, with the first step `in_progress` and later steps `pending`. At each boundary call `update_plan` before starting the next phase. This includes short phases and optional phases whose outcome is a recorded skip. Keep the same labels throughout. A nested skill tracks progress in the caller's existing plan. If the tool is unavailable, report that native tracking is unavailable and list the steps in commentary.
+Read the adapter and the selected playbook or skill phases first. For a direct invocation, the first workflow action is `update_plan`. Call it before starting the first step or gathering evidence. Use the playbook's steps or the exact phase labels in the table below, with the first step `in_progress` and later steps `pending`. At each boundary call `update_plan` before starting the next phase. Send the complete ordered plan on each call. Every update replaces the previous plan, so keep the same labels and carry forward unchanged steps. A nested skill tracks progress in the caller's existing plan. If the tool is unavailable, report that native tracking is unavailable and list the steps in commentary.
+
+For an optional phase whose decision is complete, use `explanation` to record the skip and its reason when advancing the plan. If a required phase cannot run, leave its step incomplete and report the missing prerequisite.
 
 For a direct call, use the following phases:
 
