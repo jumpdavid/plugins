@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Reflect
 
-In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex.
+In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex. Resolve the link from the physical path of this SKILL.md. If you opened the skill through a project symlink, run `realpath` on this SKILL.md first.
 
 Mine this conversation for durable learnings and route each to an edit on an existing skill.
 

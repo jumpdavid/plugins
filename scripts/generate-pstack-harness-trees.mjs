@@ -139,9 +139,12 @@ function render({ tree, name, assets, manifests, runtimeOnly = false }) {
     join(PSTACK, "README.md"),
   ];
   const files = new Map(copies.map((path) => [relative(PSTACK, path), file(path)]));
+  const adapterLocation = tree === "codex"
+    ? " Resolve the link from the physical path of this SKILL.md. If you opened the skill through a project symlink, run `realpath` on this SKILL.md first."
+    : "";
   const line =
     `In ${name}, read [the ${name} adapter](../../${adapter}) once per session before you follow this skill. ` +
-    `It maps the Cursor names in pstack skills to ${name}.`;
+    `It maps the Cursor names in pstack skills to ${name}.` + adapterLocation;
   for (const [skill, { wrap }] of classes) {
     const path = `skills/${skill}/SKILL.md`;
     const text = files.get(path).bytes.toString("utf8");
