@@ -197,7 +197,7 @@ If the host cannot grant the target, prepare the complete skill in a writable st
 
 | Cursor | Codex |
 | --- | --- |
-| Cursor Automations | Record the skipped step for Cursor routine setup. |
+| Cursor Automations | For Benny, follow [the Slack event handoff](#run-benny-from-slack-events) on a configured host. Record unavailable Cursor routine steps. |
 | Webhook routines and `SendToUser` sender-key cards | For `make-bot-ui`, use [a host-configured webhook receiver](#connect-a-bot-ui-to-codex). |
 | Bugbot | Follow [GitHub reviews](#follow-github-reviews) for Codex code review. Triage existing Bugbot findings as GitHub review threads using the forge commands in the playbook. |
 | A built-in PR tool | Use the forge command the step provides, such as `gh pr create`. |
@@ -205,6 +205,14 @@ If the host cannot grant the target, prepare the complete skill in a writable st
 | `/create-skill` | Use `$skill-creator` when available. |
 | `/deslop` | Read the bundled `cursor-team-kit/skills/deslop/SKILL.md` if available. Otherwise review the actual diff for redundant comments, unnecessary guards, type-check bypasses, avoidable nesting, and departures from surrounding code. Apply behavior-preserving edits and run `git diff --check` and the relevant tests before committing. |
 | `control-ui`, `control-cli` | Run the behavior through the project's UI driver, the browser or computer tool, or the actual CLI entry point. For visual parity capture the baseline and target on the same surface and state. Require equal dimensions and zero decoded pixel difference. Keep the captures and comparator output as evidence. |
+
+### Run Benny from Slack events
+
+Use the committed Benny operational files and the operator's separate project configuration. Have each host run read its role's `SKILL.md` from the committed pack by path. Resolve shared pstack skills through the target's Codex installation. The host needs approved Slack thread and attachment actions, the tracker adapter, and the target app control adapter. Leave a stage disabled if its required actions or configured identities are missing.
+
+Map the authenticated event's channel and message timestamp to `trigger.source_channel_id` and `trigger.ts`, including when the host exposes the timestamp as `message_ts`. Preserve the timestamps as strings and require the source channel to match configuration. A missing `thread_ts` or one equal to `ts` means a top-level report. A distinct `thread_ts` identifies the reply's root thread. [Slack thread coordinates](https://docs.slack.dev/messaging/retrieving-messages/#spotting-threads)
+
+Start triage for a new top-level report. To start reproduction from a reply, filter for the configured triage identity in the source channel. The reproduction run must read the original thread and verify the author's identity, root coordinates, and exactly one bug or performance marker before acting. Keep posting and tracker writes with the coordinator and use the same source coordinates through both runs. Deduplicate event deliveries before starting another run for the same stage and root. ChatGPT web and mobile can filter eligible Slack event tasks by channel, author, and thread replies. When a host batches events, validate and dispatch each event with its own coordinates. Confirm the chosen host's actual payload and actions before enabling either stage. [Supported app events](https://learn.chatgpt.com/docs/automations#trigger-tasks-from-app-events)
 
 ### Connect a bot UI to Codex
 
