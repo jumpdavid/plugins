@@ -165,7 +165,11 @@ For parallel history mining, give the coordinator and delegates the same scoped 
 
 Codex's workspace permissions protect `.agents/` by default. For generation or maintenance, use a host-selected authoring profile that grants write access to the named project skill. Keep the installed pstack package and other skills outside the write scope. Add a specific evidence or scratch directory when the verifier needs one.
 
+When defining named profiles in a config file, set top-level `default_permissions` to the project's ordinary policy. This example uses `:workspace`.
+
 ```toml
+default_permissions = ":workspace"
+
 [permissions.pstack-skill-edit]
 extends = ":read-only"
 
@@ -173,7 +177,7 @@ extends = ":read-only"
 ".agents/skills/verify-example" = "write"
 ```
 
-Select the profile for the authoring session with `codex -c 'default_permissions="pstack-skill-edit"'`. An App Server host can also grant the absolute target directory as a writable root when starting the approved edit. Keep review turns read-only. When the edit grant ends, explicitly restore the intended policy on the next turn.
+Select the profile for the authoring session with `codex -c 'default_permissions="pstack-skill-edit"'`. An App Server host can select it through `turn/start.permissions` or grant the absolute target directory as a writable root when starting the approved edit. Keep review turns read-only. When the edit grant ends, explicitly restore the intended policy on the next turn.
 
 If the host cannot grant the target, prepare the complete skill in a writable staging directory for trusted installation. Treat it as a draft until the final path is installed and a new session discovers and runs the skill.
 
