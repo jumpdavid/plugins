@@ -60,7 +60,7 @@ Use fresh context for native delegates in an ephemeral Codex session. Set `fork_
 
 ### Read-only delegation
 
-The review needs a sandbox that enforces read-only access. A native subagent can inherit it from a read-only parent. An App Server host can set `sandboxPolicy: { "type": "readOnly", "networkAccess": false }` and `approvalPolicy: "never"` for the review turn. A custom agent file inherits the parent's sandbox. When the parent must stay writable, a trusted host launcher can start a separate read-only CLI run against the same checkout.
+The review needs a sandbox that enforces read-only access. A native subagent can inherit it from a read-only parent. An App Server host can set `sandboxPolicy: { "type": "readOnly", "networkAccess": false }` and `approvalPolicy: "never"` when starting the review turn. These overrides apply to subsequent turns until replaced. Set the authorized policies explicitly when switching between review and editing. A custom agent file inherits the parent's sandbox. When the parent must stay writable, a trusted host launcher can start a separate read-only CLI run against the same checkout.
 
 ```sh
 codex --ask-for-approval never exec --ephemeral --sandbox read-only -C "$checkout" "$brief"
@@ -173,7 +173,7 @@ extends = ":read-only"
 ".agents/skills/verify-example" = "write"
 ```
 
-Select the profile for the authoring session with `codex -c 'default_permissions="pstack-skill-edit"'`. An App Server host can also grant the absolute target directory as a writable root for one turn. When a workflow calls for read-only reviewers before applying changes, keep the review turn read-only and grant the target only for the follow-up edit.
+Select the profile for the authoring session with `codex -c 'default_permissions="pstack-skill-edit"'`. An App Server host can also grant the absolute target directory as a writable root when starting the approved edit. Keep review turns read-only. When the edit grant ends, explicitly restore the intended policy on the next turn.
 
 If the host cannot grant the target, prepare the complete skill in a writable staging directory for trusted installation. Treat it as a draft until the final path is installed and a new session discovers and runs the skill.
 
