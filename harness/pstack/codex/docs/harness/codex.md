@@ -197,13 +197,22 @@ If the host cannot grant the target, prepare the complete skill in a writable st
 
 | Cursor | Codex |
 | --- | --- |
-| Cursor Automations and webhooks | These integrations require a separate migration. Record the skipped step. |
+| Cursor Automations | Record the skipped step for Cursor routine setup. |
+| Webhook routines and `SendToUser` sender-key cards | For `make-bot-ui`, use [a host-configured webhook receiver](#connect-a-bot-ui-to-codex). |
 | Bugbot | Follow [GitHub reviews](#follow-github-reviews) for Codex code review. Triage existing Bugbot findings as GitHub review threads using the forge commands in the playbook. |
 | A built-in PR tool | Use the forge command the step provides, such as `gh pr create`. |
 | `/loop` | Keep the current task active and run the named check until its exit condition is met. Use the watcher command when the playbook provides one. For a follow-up after disconnect, use [durable follow-up](#durable-follow-up). |
 | `/create-skill` | Use `$skill-creator` when available. |
 | `/deslop` | Read the bundled `cursor-team-kit/skills/deslop/SKILL.md` if available. Otherwise review the actual diff for redundant comments, unnecessary guards, type-check bypasses, avoidable nesting, and departures from surrounding code. Apply behavior-preserving edits and run `git diff --check` and the relevant tests before committing. |
 | `control-ui`, `control-cli` | Run the behavior through the project's UI driver, the browser or computer tool, or the actual CLI entry point. For visual parity capture the baseline and target on the same surface and state. Require equal dimensions and zero decoded pixel difference. Keep the captures and comparator output as evidence. |
+
+### Connect a bot UI to Codex
+
+Use an operator-configured authenticated receiver bound to a saved Codex thread. Skip the Cursor routine, sender-key card, and tailnet setup steps. If the receiver or thread binding is missing, name the missing prerequisite and stop before wiring or exposing the UI.
+
+Send the declared JSON event from the UI backend. Keep the sender credential in the host's server-side credential store. The receiver authenticates, validates the payload against the declared actions and fields, and deduplicates by event ID. Use [durable follow-up](#durable-follow-up) to deliver the validated event as data to the receiver's configured thread.
+
+Before reporting the connection live, send a harmless event. Verify that a new turn on the same thread completes with a result matching the event ID. An HTTP acceptance or enqueue receipt records delivery progress.
 
 ### Follow GitHub reviews
 
