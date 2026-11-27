@@ -155,7 +155,9 @@ Trust the project and review the handler using `/hooks` in the CLI or Settings â
 
 ### Read project chat history
 
-Use a host reader scoped to the project and current account. For parallel history mining, expose the same scoped read-only tool to native subagents and assign each a history slice. Require a source thread ID for each slice. A trusted MCP server can provide this tool to the coordinator and its delegates. If only the coordinator can read the history, report the narrower coverage.
+Use a host reader scoped to the current account and project. Resolve thread IDs from a listing scoped to both before calling a thread reader, including for known IDs. With App Server, set `cwd` and `currentAccountOnly: true` on `thread/list`, then call `thread/items/list` for matching IDs. The desktop thread reader can return a message preview from another project on the same account even when turns are omitted. If no scoped listing or reader is available, report that project history is unavailable.
+
+For parallel history mining, give the coordinator and delegates the same scoped read-only tool. A trusted MCP server can check project membership before reading turns. When the host must enforce isolation, offer delegates only the scoped reader for chat history. Assign each delegate a history slice and require a source thread ID. If only the coordinator can read scoped history, keep the reads there and report the narrower coverage.
 
 ### Write a project skill
 
