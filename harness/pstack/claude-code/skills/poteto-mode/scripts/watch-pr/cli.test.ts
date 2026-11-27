@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { type CliRuntime, main, parseArgs } from "./cli.ts";
 import { fakeReader, passingCheck } from "./fakes.test-helper.ts";
+import { WatcherQueryError } from "./github.ts";
 import { renderJson, renderPretty } from "./render.ts";
 import type { GitHubReader, WatcherVerdict } from "./types.ts";
 import { parsePrNumber } from "./types.ts";
@@ -189,6 +190,38 @@ describe("main", () => {
       mode: "queued-stack",
     });
     expect(harness.stdout[0]).not.toContain('"kind":"QUEUE"');
+  });
+
+  it("returns a missing-checks error without retrying a status-only read", async () => {
+    let attempts = 0;
+    const harness = testRuntime({
+      ...fakeReader(),
+      async checksFastPath() {
+        attempts += 1;
+        throw new WatcherQueryError({
+          kind: "checks-unavailable",
+          retryable: true,
+          detail: "no checks reported",
+        });
+      },
+    });
+    const code = await main(
+      ["--owner", "owner", "--repo", "repo", "--pr", "1", "--status-only"],
+      harness.runtime
+    );
+
+    expect(attempts).toBe(1);
+    expect(code).toBe(7);
+    expect(harness.stdout).toHaveLength(1);
+    expect(JSON.parse(harness.stdout[0])).toMatchObject({
+      kind: "BLOCKER",
+      terminal: true,
+      blocker: {
+        kind: "status-query",
+        failures: 1,
+        failure: { kind: "checks-unavailable" },
+      },
+    });
   });
 
   it("returns exit 4 for a hidden GitHub-side CI refusal", async () => {
