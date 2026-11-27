@@ -30,12 +30,15 @@ test("the hook applies mode only to its own session and honors turn-level invoca
     return JSON.parse(result.stdout).hookSpecificOutput?.additionalContext;
   }
 
-  assert.equal(send(active, "Explain what poteto-mode on does."), undefined);
+  assert.match(send(active, "Explain what poteto-mode on does."), /Poteto mode is off/);
   assert.equal(existsSync(state), false);
   assert.match(send(active, "poteto-mode on"), /set poteto mode to on/);
   assert.match(send(active, "Inspect the test workflow."), /Poteto mode is on/);
   assert.ok(send(active, "Inspect CI.").includes(skill));
-  assert.equal(send(other, "Inspect the test workflow."), undefined);
+  assert.match(send(other, "Inspect the test workflow."), /Poteto mode is off.*forked chat's inherited history/);
+  assert.match(send(other, "$poteto-mode Read the README."), /Honor any explicit skill invocation/);
+  const otherState = join(home, "pstack", "mode", createHash("sha256").update(other).digest("hex"));
+  assert.equal(existsSync(otherState), false);
 
   assert.match(send(active, "poteto-mode off"), /set poteto mode to off/);
   const after = send(active, "Inspect the test workflow.");

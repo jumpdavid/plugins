@@ -167,7 +167,7 @@ For a project that uses the generated skills link, add this handler to the proje
 }
 ```
 
-Trust the project and review the handler using `/hooks` in the CLI or Settings → Hooks in the app. Review the installed helper when updating it at the same path. Send `poteto-mode on` or `poteto-mode off` as its own chat message. The hook stores the selection under `$CODEX_HOME/pstack/mode/` by session ID and applies it to later prompts in that session, including after resume. Fresh chats start with their default behavior. Use `$poteto-mode` when you want to invoke the skill for a single turn. [Codex hook trust](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)
+Trust the project and review the handler using `/hooks` in the CLI or Settings → Hooks in the app. Review the installed helper when updating it at the same path. Send `poteto-mode on` or `poteto-mode off` as its own chat message. The hook stores the selection under `$CODEX_HOME/pstack/mode/` by session ID and applies it to later prompts in that session, including after resume. Fresh chats and forks start with the mode off, including forks whose copied history contains earlier mode instructions. Use `$poteto-mode` when you want to invoke the skill for a single turn. [Codex hook trust](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)
 
 ### Read project chat history
 

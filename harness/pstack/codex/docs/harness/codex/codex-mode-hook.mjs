@@ -23,7 +23,7 @@ function readMode() {
     throw new Error("Invalid persisted poteto mode");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
-    return null;
+    return "off";
   }
 }
 
@@ -48,12 +48,9 @@ function context() {
     const skill = fileURLToPath(new URL("../../../skills/poteto-mode/SKILL.md", import.meta.url));
     return `Poteto mode is on for this session. Read ${skill} and its linked Codex adapter, then follow the skill's matching playbook before starting the current request.`;
   }
-  if (mode === "off")
-    return "Poteto mode is off for this session. Stop applying it from earlier turns. Honor any explicit skill invocation on this turn.";
-  return null;
+  return "Poteto mode is off for this session. Stop applying it from earlier turns or a forked chat's inherited history. Honor any explicit skill invocation on this turn.";
 }
 
-const additionalContext = context();
-process.stdout.write(JSON.stringify(additionalContext ? {
-  hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext },
-} : {}));
+process.stdout.write(JSON.stringify({
+  hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: context() },
+}));
