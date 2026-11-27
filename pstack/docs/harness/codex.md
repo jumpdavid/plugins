@@ -196,7 +196,7 @@ codex queue --resume --thread "$thread" --message "$message"
 
 This uses a running local daemon. To target an App Server endpoint supplied by the host, add `--remote "$endpoint"`. Use the original thread ID and include the verified checkpoint and next action in the message.
 
-Record the enqueue and the new turn's terminal result separately. A successful CLI exit confirms the enqueue. If it warns that resume failed, check whether the named thread actually ran the follow-up. Recover from the last verified checkpoint after an interrupted turn. A watcher or scheduler owns the event that sends the follow-up.
+Record the enqueue and the new turn's terminal result separately. A successful CLI exit confirms the enqueue. If it warns that resume failed, check whether the named thread actually ran the follow-up. Another host can report `notLoaded` or `interrupted` while the receiving host is still running the turn. Before retrying, verify the terminal result on the receiving host or from a saved terminal event. Recover from the last verified checkpoint after a confirmed interruption. A watcher or scheduler owns the event that sends the follow-up.
 
 For timed follow-ups, confirm the previous tick's terminal result on the same thread before arming the next. Keep an unverified tick pending while the turn is running. If the terminal result lacks the expected checkpoint, report the incomplete check. Stop scheduling when the workflow's completion condition is verified.
 
