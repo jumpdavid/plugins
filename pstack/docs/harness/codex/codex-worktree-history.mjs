@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { isAbsolute, relative, sep } from "node:path";
 import { listPages, withAppServer } from "./codex-app-server.mjs";
 
@@ -25,6 +26,14 @@ function isInside(root, cwd) {
   return subpath !== ".." && !subpath.startsWith(".." + sep) && !isAbsolute(subpath);
 }
 
+function physicalPath(path) {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
+
 try {
   const inventory = execFileSync("git", ["worktree", "list", "--porcelain", "-z"], { encoding: "utf8" });
   const projectWorktrees = new Set(inventory.split("\0")
@@ -32,6 +41,7 @@ try {
   if (paths.some(path => !projectWorktrees.has(path))) {
     throw new Error("Expected worktree paths from the current Git repository.");
   }
+  const physicalWorktrees = new Map(paths.map(path => [path, physicalPath(path)]));
   const recentSince = Math.floor(Date.now() / 1000) - 5 * 86400;
   await withAppServer("pstack-worktree-audit", async (request) => {
     for (const archived of [false, true]) {
@@ -66,8 +76,12 @@ try {
               }
             }
           }
-          for (const path of paths) {
-            if (targets.some(target => isInside(path, target))) record(path, thread.updatedAt, hold);
+          const physicalTargets = targets.map(physicalPath);
+          for (const [path, resolved] of physicalWorktrees) {
+            if (targets.some(target => isInside(path, target)) ||
+                physicalTargets.some(target => isInside(resolved, target))) {
+              record(path, thread.updatedAt, hold);
+            }
           }
         }
       }

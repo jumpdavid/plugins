@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { test } from "node:test";
@@ -15,8 +15,10 @@ test("worktree audit requires known history and uses scoped, paginated Codex met
   ctx.after(() => rmSync(tmp, { recursive: true, force: true }));
   const repo = join(tmp, "repo");
   const bin = join(tmp, "bin");
-  const paths = ["recent tree", "old", "pinned", "absent", "closed", "untracked", "missing", "cross", "absolute read", "absolute list", "absolute search"].map((name) => join(tmp, name));
-  const [recent, old, pinned, absent, closed, untracked, missing, cross, absoluteRead, absoluteList, absoluteSearch] = paths;
+  const paths = ["recent tree", "old", "pinned", "absent", "closed", "untracked", "missing", "cross", "absolute read", "absolute list", "absolute search", "alias read", "alias cwd"].map((name) => join(tmp, name));
+  const [recent, old, pinned, absent, closed, untracked, missing, cross, absoluteRead, absoluteList, absoluteSearch, aliasRead, aliasCwd] = paths;
+  const readLink = join(tmp, "read through symlink");
+  const cwdLink = join(tmp, "cwd through symlink");
 
   mkdirSync(bin);
   writeFileSync(join(bin, "origin"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
@@ -30,6 +32,8 @@ test("worktree audit requires known history and uses scoped, paginated Codex met
   execFileSync("git", ["-C", closed, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgSign=false", "commit", "-q", "--allow-empty", "-m", "unmerged"]);
   writeFileSync(join(untracked, "draft.txt"), "Keep this file.\n");
   rmSync(missing, { recursive: true });
+  symlinkSync(aliasRead, readLink, "dir");
+  symlinkSync(aliasCwd, cwdLink, "dir");
 
   // Supply controlled timestamps through the CLI protocol. The audit still runs against real Git worktrees.
   writeFileSync(join(bin, "codex"), `#!/usr/bin/env node
@@ -47,8 +51,9 @@ if (process.argv[2] === "debug") {
 }
 assert.deepEqual(process.argv.slice(2), ["app-server", "--stdio"]);
 const paths = JSON.parse(process.env.PSTACK_AUDIT_PATHS);
-const [recent, old, pinned, absent, closed, untracked, missing, cross, absoluteRead, absoluteList, absoluteSearch] = paths;
+const [recent, old, pinned, absent, closed, untracked, missing, cross, absoluteRead, absoluteList, absoluteSearch, aliasRead, aliasCwd] = paths;
 const repo = process.env.PSTACK_AUDIT_REPO;
+const [readLink, cwdLink] = JSON.parse(process.env.PSTACK_AUDIT_ALIASES);
 const now = Math.floor(Date.now() / 1000);
 const weekAgo = now - 7 * 86400;
 createInterface({ input: process.stdin }).on("line", (line) => {
@@ -61,11 +66,13 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     if (params.threadId !== "main-thread") return send({ data: [], nextCursor: null });
     return send({ data: [
       { item: { type: "commandExecution", cwd: process.env.PSTACK_INVALID_ITEM_CWD ? null : cross + "/src" } },
+      { item: { type: "commandExecution", cwd: cwdLink } },
       { item: { type: "commandExecution", cwd: absent + "-neighbor" } },
       { item: { type: "commandExecution", cwd: repo, commandActions: [
         { type: "read", path: absoluteRead + "/nested/file.txt" },
         { type: "listFiles", path: absoluteList },
         { type: "search", path: absoluteSearch + "/nested" },
+        { type: "read", path: readLink + "/.git" },
         { type: "read", path: absent + "-neighbor/file.txt" },
         { type: "search", path: "../absent" },
         { type: "unknown", path: absent },
@@ -81,8 +88,11 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   if (process.env.PSTACK_AUDIT_UNSCOPED === "1") {
     return send({ data: [{ cwd: "/other/project", updatedAt: now }], nextCursor: null });
   }
+  if (process.env.PSTACK_AUDIT_UNSCOPED === "2") {
+    return send({ data: [{ id: "unscoped-alias", cwd: cwdLink, updatedAt: now }], nextCursor: null });
+  }
   if (params.archived) return send({
-    data: [old, closed, untracked, missing, cross].map(cwd => ({ cwd, updatedAt: weekAgo })),
+    data: [old, closed, untracked, missing, cross, aliasRead, aliasCwd].map(cwd => ({ cwd, updatedAt: weekAgo })),
     nextCursor: null,
   });
   if (params.cursor === null) return send({ data: [
@@ -94,7 +104,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
 });
 `, { mode: 0o755 });
 
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}`, PSTACK_AUDIT_PATHS: JSON.stringify(paths), PSTACK_AUDIT_REPO: repo };
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}`, PSTACK_AUDIT_PATHS: JSON.stringify(paths), PSTACK_AUDIT_REPO: repo, PSTACK_AUDIT_ALIASES: JSON.stringify([readLink, cwdLink]) };
   const run = (unscoped: string) => {
     const output = execFileSync("bash", [relative(tmp, audit), "--history-command", relative(tmp, history), "-b", "HEAD", repo], {
       cwd: tmp,
@@ -112,7 +122,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   assert.equal(rows.get(recent)?.bucket, "verify-recent-chat");
   assert.equal(rows.get(pinned)?.bucket, "verify-recent-chat");
   assert.equal(rows.get(cross)?.bucket, "verify-recent-chat");
-  for (const target of [absoluteRead, absoluteList, absoluteSearch]) {
+  for (const target of [absoluteRead, absoluteList, absoluteSearch, aliasRead, aliasCwd]) {
     assert.equal(rows.get(target)?.bucket, "verify-recent-chat");
   }
   assert.equal(rows.get(old)?.bucket, "safe");
@@ -128,6 +138,15 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     assert.equal(row.lastChat, "unknown");
     assert.notEqual(row.bucket, "safe");
   }
+
+  const returnedAlias = spawnSync(process.execPath, [history, ...paths], {
+    env: { ...env, PSTACK_AUDIT_UNSCOPED: "2" },
+    cwd: repo,
+    encoding: "utf8",
+  });
+  assert.equal(returnedAlias.status, 1);
+  assert.equal(returnedAlias.stdout, "");
+  assert.match(returnedAlias.stderr, /Unscoped thread\/list response/);
 
   const repeated = spawnSync(process.execPath, [history, ...paths], {
     env: { ...env, PSTACK_REPEAT_CURSOR: "1" },
