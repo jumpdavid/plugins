@@ -32,4 +32,14 @@ jobs:
         run: node scripts/generate-pstack-harness-trees.mjs --check
 
       - name: Test pstack skill scripts
-        run: node --disable-warning=ExperimentalWarning --test pstack/skills/*/scripts/test/*.test.ts
+        run: node --disable-warning=ExperimentalWarning --test pstack/skills/*/scripts/test/*.test.ts pstack/tests/*.test.ts
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      - name: Test pstack PR watcher
+        working-directory: pstack/skills/poteto-mode/scripts
+        run: |
+          bun install --frozen-lockfile
+          bun run test

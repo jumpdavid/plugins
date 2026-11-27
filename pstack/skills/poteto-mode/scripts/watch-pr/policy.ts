@@ -67,6 +67,9 @@ export async function readSnapshot(args: {
     return { kind: "merged", context: args.context, facts };
   if (facts.state === "CLOSED")
     return { kind: "closed", context: args.context, facts };
+  const codexReviewRunning =
+    facts.headRefOid !== null &&
+    await args.reader.codexReviewRunning(args.context, facts.headRefOid);
   const threads = await resolveReviewThreads(args.reader, args.context);
   const checks = await resolveChecks(args.reader, args.context);
   const failed = nonEmpty(
@@ -129,7 +132,7 @@ export async function readSnapshot(args: {
     facts,
     threads,
     ci,
-    reviewAutomationRunning: checks.checks.some(
+    reviewAutomationRunning: codexReviewRunning || checks.checks.some(
       (check) =>
         check.kind === "pending" &&
         AUTOMATION_TOKENS.some((token) =>
@@ -168,15 +171,19 @@ function gateReason(
     ? "changes-requested"
     : null;
 }
+function pendingWork(row: T.PrSnapshot): T.PendingWork | null {
+  if (row.kind !== "open") return null;
+  if (row.ci.kind === "ci-pending")
+    return { kind: "pending-checks", pending: row.ci.pending };
+  return row.reviewAutomationRunning ? { kind: "review-automation" } : null;
+}
+
 function gateBlocker(
   row: T.PrSnapshot,
   allowDraft: boolean
 ): T.MergeBlocker | null {
   const reason = gateReason(row, allowDraft);
-  return reason === null ||
-    (reason === "draft-pr" &&
-      row.kind === "open" &&
-      row.ci.kind === "ci-pending")
+  return reason === null || (reason === "draft-pr" && pendingWork(row) !== null)
     ? null
     : { kind: "merge-gate", pr: row.context, reason };
 }
@@ -193,6 +200,7 @@ function readyContribution(
   if (
     row.kind !== "open" ||
     row.ci.kind !== "ci-clean" ||
+    row.reviewAutomationRunning ||
     row.threads.length !== 0 ||
     conflictBlocker(row) !== null ||
     gateReason(row, allowDraft) !== null
@@ -226,8 +234,8 @@ export function classifyPr(
     gateBlocker(row, allowDraft),
   ])
     if (blocker !== null) return { kind: "blocker", blocker };
-  if (row.kind === "open" && row.ci.kind === "ci-pending")
-    return { kind: "waiting", frontier: row.context, pending: row.ci.pending };
+  const reason = pendingWork(row);
+  if (reason !== null) return { kind: "waiting", frontier: row.context, reason };
   const ready = readyContribution(row, allowDraft);
   if (ready === null) throw new Error("snapshot has no classified decision");
   return ready.kind === "merged-pr"
@@ -247,13 +255,10 @@ export function selectTierMajorStackDecision(
     const blocker = gateBlocker(row, allowDraft);
     if (blocker !== null) return { kind: "blocker", blocker };
   }
-  for (const row of rows)
-    if (row.kind === "open" && row.ci.kind === "ci-pending")
-      return {
-        kind: "waiting",
-        frontier: row.context,
-        pending: row.ci.pending,
-      };
+  for (const row of rows) {
+    const reason = pendingWork(row);
+    if (reason !== null) return { kind: "waiting", frontier: row.context, reason };
+  }
   const prs = nonEmpty(
     rows
       .map((row) => readyContribution(row, allowDraft))
@@ -470,6 +475,32 @@ export async function runSimple(args: {
         kind: "terminal",
         verdict: blockerVerdict(stamp, decision.blocker),
       };
+    if (decision.kind === "ready" || decision.kind === "clear") {
+      for (const row of complete) {
+        if (row.kind !== "open") continue;
+        const current = await args.dependencies.reader.pullRequest(row.context);
+        if (current.headRefOid !== row.facts.headRefOid)
+          throw new WatcherQueryError({
+            kind: "head-changed",
+            retryable: true,
+            detail: `PR #${row.context.number} head changed while reading review and checks`,
+          });
+        if (
+          current.state !== row.facts.state ||
+          current.isDraft !== row.facts.isDraft ||
+          current.reviewDecision !== row.facts.reviewDecision ||
+          current.mergeable !== row.facts.mergeable ||
+          current.mergeStateStatus !== row.facts.mergeStateStatus ||
+          current.headRefName !== row.facts.headRefName ||
+          current.baseRefName !== row.facts.baseRefName
+        )
+          throw new WatcherQueryError({
+            kind: "pr-facts-changed",
+            retryable: true,
+            detail: `PR #${row.context.number} merge or branch state changed while reading review and checks`,
+          });
+      }
+    }
     if (decision.kind === "ready" || decision.kind === "merged")
       return {
         kind: "terminal",
@@ -501,7 +532,7 @@ export async function runSimple(args: {
         kind: "WAITING",
         terminal: false,
         frontier: decision.frontier,
-        reason: { kind: "pending-checks", pending: decision.pending },
+        reason: decision.reason,
       })
     );
     return {
@@ -512,13 +543,13 @@ export async function runSimple(args: {
           kind: "TIMEOUT",
           terminal: true,
           exitCode: 5,
-          reason: { kind: "pending-checks", pending: decision.pending },
+          reason: decision.reason,
         }),
     };
   };
   return pollUntilTerminal({
     dependencies: args.dependencies,
-    options: args.options,
+    options: args.statusOnly ? { ...args.options, maxQueryErrors: 1 } : args.options,
     stamp,
     step,
   });
@@ -640,10 +671,7 @@ export type QueueEvaluation =
       readonly state: QueueState;
       readonly frontier: T.PrContext;
       readonly reason:
-        | {
-            readonly kind: "pending-checks";
-            readonly pending: T.NonEmpty<T.PendingCheck>;
-          }
+        | T.PendingWork
         | { readonly kind: "merge-queue"; readonly unmergedCount: number };
       readonly emit: boolean;
     };
@@ -691,17 +719,15 @@ export function evaluateQueue(
       frontier,
       unmergedCount: active.length,
     };
-  const row = rows[0];
-  const pending =
-    row.kind === "open" && row.ci.kind === "ci-pending" ? row.ci.pending : null;
   const reason =
-    pending === null
-      ? ({ kind: "merge-queue", unmergedCount: active.length } as const)
-      : ({ kind: "pending-checks", pending } as const);
+    pendingWork(rows[0]) ??
+    ({ kind: "merge-queue", unmergedCount: active.length } as const);
   const key =
     reason.kind === "pending-checks"
       ? `pending:${frontier.number}:${reason.pending.length}`
-      : `queue:${frontier.number}:${reason.unmergedCount}`;
+      : reason.kind === "review-automation"
+        ? `review:${frontier.number}`
+        : `queue:${frontier.number}:${reason.unmergedCount}`;
   return {
     kind: "waiting",
     state: { ...state, frontier, lastWaitKey: key },
