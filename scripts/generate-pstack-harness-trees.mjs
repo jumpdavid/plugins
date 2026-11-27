@@ -148,7 +148,10 @@ function render({ tree, name, assets, manifests, runtimeOnly = false }) {
   for (const [skill, { wrap, frontmatter }] of classes) {
     const path = `skills/${skill}/SKILL.md`;
     const text = files.get(path).bytes.toString("utf8");
-    if (wrap) files.get(path).bytes = Buffer.from(text.replace(/^(# .*)\n+/m, `$1\n\n${line}\n\n`));
+    const playbookEntry = tree === "codex" && skill === "poteto-mode"
+      ? "\n\nFor a new playbook, read the project instructions, the Codex adapter, and the selected playbook before opening task evidence. After these reads, use the native `update_plan` tool before any task-specific inspection. Make one entry for each of the playbook's steps, in order. Keep short checkpoints and final review as separate steps. Mark the first step in progress, then update the full plan before starting each later step. Follow the adapter's [plan tracking](../../docs/harness/codex.md#plan-tracking) for nested workflows and unavailable tools."
+      : "";
+    if (wrap) files.get(path).bytes = Buffer.from(text.replace(/^(# .*)\n+/m, `$1\n\n${line}${playbookEntry}\n\n`));
     const policy = `skills/${skill}/agents/openai.yaml`;
     if (tree === "codex" && !files.has(policy) && /^disable-model-invocation:[ \t]*true[ \t]*$/m.test(frontmatter)) {
       files.set(policy, {

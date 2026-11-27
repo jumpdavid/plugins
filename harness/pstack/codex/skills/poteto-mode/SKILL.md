@@ -10,6 +10,8 @@ color: yellow
 
 In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex. Resolve the installed SKILL.md with `realpath`, then open `../../docs/harness/codex.md` from its physical directory. The generated package root ends in `harness/pstack/codex`. If the adapter read fails, correct the path before using workflow tools or reading task files.
 
+For a new playbook, read the project instructions, the Codex adapter, and the selected playbook before opening task evidence. After these reads, use the native `update_plan` tool before any task-specific inspection. Make one entry for each of the playbook's steps, in order. Keep short checkpoints and final review as separate steps. Mark the first step in progress, then update the full plan before starting each later step. Follow the adapter's [plan tracking](../../docs/harness/codex.md#plan-tracking) for nested workflows and unavailable tools.
+
 Bundled skills live at `../<name>/SKILL.md` from this file, so put this file's absolute path in every `poteto-agent` prompt.
 
 ## Non-negotiables
