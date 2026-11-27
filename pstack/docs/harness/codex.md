@@ -185,12 +185,19 @@ If the host cannot grant the target, prepare the complete skill in a writable st
 
 | Cursor | Codex |
 | --- | --- |
-| Cursor Automations, webhooks, and Bugbot setup | These integrations require a separate migration. Record the skipped step. Process existing GitHub review threads with the forge commands in the playbook. |
+| Cursor Automations and webhooks | These integrations require a separate migration. Record the skipped step. |
+| Bugbot | Follow [GitHub reviews](#follow-github-reviews) for Codex code review. Triage existing Bugbot findings as GitHub review threads using the forge commands in the playbook. |
 | A built-in PR tool | Use the forge command the step provides, such as `gh pr create`. |
 | `/loop` | Keep the current task active and run the named check until its exit condition is met. Use the watcher command when the playbook provides one. For a follow-up after disconnect, use [durable follow-up](#durable-follow-up). |
 | `/create-skill` | Use `$skill-creator` when available. |
 | `/deslop` | Read the bundled `cursor-team-kit/skills/deslop/SKILL.md` if available. Otherwise review the actual diff for redundant comments, unnecessary guards, type-check bypasses, avoidable nesting, and departures from surrounding code. Apply behavior-preserving edits and run `git diff --check` and the relevant tests before committing. |
 | `control-ui`, `control-cli` | Run the behavior through the project's UI driver, the browser or computer tool, or the actual CLI entry point. For visual parity capture the baseline and target on the same surface and state. Require equal dimensions and zero decoded pixel difference. Keep the captures and comparator output as evidence. |
+
+### Follow GitHub reviews
+
+For automatic code review, the operator enables it in the connected repository's Codex settings and selects the trigger. For an authorized one-off review, use `@codex review` on the PR. [Codex GitHub code review](https://learn.chatgpt.com/docs/third-party/github#set-up-codex-code-review)
+
+Use the Babysit watcher to check for running reviews and open threads. A clear watcher status means it detected no running review. When a step requires proof that Codex code review completed, verify the Connector's review receipt says `completed` and matches the PR's current head SHA. Triage posted findings through the playbook's review-thread workflow.
 
 ### Durable follow-up
 
