@@ -13,7 +13,7 @@ const GUIDE = "docs/guide";
 const GUIDE_IMAGES = `${GUIDE}/images`;
 const HARNESSES = [
   { tree: "claude-code", name: "Claude Code", manifests: ["plugin.json", ".claude-plugin/plugin.json"], assets: [GUIDE_IMAGES] },
-  { tree: "codex", name: "Codex", manifests: ["plugin.json"], assets: ["docs/harness/codex"], runtimeOnly: true },
+  { tree: "codex", name: "Codex", manifests: ["plugin.json"], assets: ["docs/harness/codex"], runtimeOnly: true, adapterSections: { statechart: "run-statechart" } },
 ];
 const COMMAND = "node scripts/generate-pstack-harness-trees.mjs";
 const GITHUB = "https://github.com/cursor/plugins";
@@ -128,7 +128,7 @@ function isSkillTest(path) {
     || /\.(?:test(?:-helper)?|compile)\.[cm]?[jt]sx?$/.test(basename(path));
 }
 
-function render({ tree, name, assets, manifests, runtimeOnly = false }) {
+function render({ tree, name, assets, manifests, runtimeOnly = false, adapterSections = {} }) {
   const adapter = `docs/harness/${tree}.md`;
   const copies = [
     ...walk(SKILLS).filter((path) => !runtimeOnly || !isSkillTest(path)),
@@ -148,10 +148,14 @@ function render({ tree, name, assets, manifests, runtimeOnly = false }) {
   for (const [skill, { wrap, frontmatter }] of classes) {
     const path = `skills/${skill}/SKILL.md`;
     const text = files.get(path).bytes.toString("utf8");
+    const section = adapterSections[skill];
+    const entry = section
+      ? `In ${name}, read [the ${name} runtime instructions](../../${adapter}#${section}) before you follow this skill.` + adapterLocation
+      : line;
     const playbookEntry = tree === "codex" && skill === "poteto-mode"
       ? "\n\nFor a new playbook, read the project instructions, the Codex adapter, and the selected playbook before opening task evidence. After these reads, use the native `update_plan` tool before any task-specific inspection. Make one entry for each of the playbook's steps, in order. Keep short checkpoints and final review as separate steps. Mark the first step in progress, then update the full plan before starting each later step. Follow the adapter's [plan tracking](../../docs/harness/codex.md#plan-tracking) for nested workflows and unavailable tools."
       : "";
-    if (wrap) files.get(path).bytes = Buffer.from(text.replace(/^(# .*)\n+/m, `$1\n\n${line}${playbookEntry}\n\n`));
+    if (wrap || section) files.get(path).bytes = Buffer.from(text.replace(/^(# .*)\n+/m, `$1\n\n${entry}${playbookEntry}\n\n`));
     const policy = `skills/${skill}/agents/openai.yaml`;
     if (tree === "codex" && !files.has(policy) && /^disable-model-invocation:[ \t]*true[ \t]*$/m.test(frontmatter)) {
       files.set(policy, {
@@ -214,6 +218,8 @@ if (process.argv.includes("--check")) {
     writeFileSync(join(OUT, path), bytes);
     chmodSync(join(OUT, path), executable ? 0o755 : 0o644);
   }
-  const wrapped = [...classes.values()].filter(({ wrap }) => wrap).length;
-  console.log(`${skills.length} skills per tree, ${wrapped} SKILL.md files with an adapter line in each tree`);
+  for (const { name, adapterSections = {} } of HARNESSES) {
+    const wrapped = [...classes].filter(([skill, { wrap }]) => wrap || adapterSections[skill]).length;
+    console.log(`${name}: ${skills.length} skills, ${wrapped} SKILL.md files with an adapter line`);
+  }
 }

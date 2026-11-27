@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # Statechart
 
+In Codex, read [the Codex runtime instructions](../../docs/harness/codex.md#run-statechart) before you follow this skill. Resolve the installed SKILL.md with `realpath`, then open `../../docs/harness/codex.md` from its physical directory. The generated package root ends in `harness/pstack/codex`. If the adapter read fails, correct the path before using workflow tools or reading task files.
+
 The chart shows how a system moves between states, in the words of the person who reads it. That person, the reader, decides whether the behavior is right.
 
 ## Run

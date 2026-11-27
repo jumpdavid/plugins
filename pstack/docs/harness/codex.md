@@ -249,6 +249,12 @@ Record the enqueue and the new turn's terminal result separately. A successful C
 
 For timed follow-ups, confirm the previous tick's terminal result on the same thread before arming the next. Keep an unverified tick pending while the turn is running. If the terminal result lacks the expected checkpoint, report the incomplete check. Stop scheduling when the workflow's completion condition is verified.
 
+### Run Statechart
+
+Use a runtime that permits the local TCP listener required by the pinned TLC model checker. On macOS, the default Codex workspace sandbox denies this bind even when Java and TLC are installed. A localhost destination allowlist controls outbound access, so it leaves this bind denied.
+
+Run the skill's existing command on scratch files in an authorized terminal or a prepared isolated container. In the container, set `TLA2TOOLS` and `JAVA` to the installed tools. The container can run without external networking once those tools are ready. If the current host lacks a runtime that permits the bind, report the missing capability before running the check.
+
 ### Worktree cleanup
 
 Use [the shared worktree audit](../../skills/poteto-mode/scripts/worktree-audit.sh) with `--history-command` set to the absolute installed path of [the Codex history reader](codex/codex-worktree-history.mjs). The reader scopes the history query to the current account and registered Git worktrees, including the main checkout. It uses saved command working directories and structured absolute targets from recent, pinned, or active threads to recognize activity in another worktree. It returns activity metadata for the worktrees being audited.
