@@ -39,6 +39,8 @@ For a direct call, use the following phases:
 
 If required coverage is missing, leave Fan out open, report what is missing, and end the review. Resume when the required coverage is available. App Server reports real plan updates as `turn/plan/updated` events.
 
+For `interrogate`, before completing Verify, record each retained finding with the parent command as submitted to the native tool and its result from Verify. In Report, copy that command verbatim, preserving the executable as invoked and every argument. Include the relevant output and any exit status the finding relies on. Attribute supporting reviewer evidence to its reviewer. Leave a finding unverified when the matching parent result is missing.
+
 ## Subagent fields
 
 | Cursor | Codex |
