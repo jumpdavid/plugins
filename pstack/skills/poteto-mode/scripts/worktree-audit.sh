@@ -64,17 +64,16 @@ git rev-parse --verify --quiet "$base^{commit}" >/dev/null 2>&1 || { echo "error
 # PR state by branch, fetched once as [{number, state, head}] with a lowercase
 # state. Origin when its CLI can read this repo's PRs, otherwise gh. Empty when
 # neither can.
-prs=$(mktemp) || exit 1
-trap 'rm -f -- "$prs"' EXIT
+prs=
 if command -v origin >/dev/null 2>&1 \
 	&& raw=$(origin pr list --author "@me" --state all --limit 1000 \
 		--json number,status,headRef 2>/dev/null); then
-	printf '%s' "$raw" | jq '[.[] | {number, state: (.status | ascii_downcase), head: .headRef}]' > "$prs" 2>/dev/null
+	prs=$(printf '%s' "$raw" | jq '[.[] | {number, state: (.status | ascii_downcase), head: .headRef}]' 2>/dev/null)
 elif raw=$(gh pr list --author "@me" --state all --limit 1000 \
 	--json number,state,headRefName 2>/dev/null); then
-	printf '%s' "$raw" | jq '[.[] | {number, state: (.state | ascii_downcase), head: .headRefName}]' > "$prs" 2>/dev/null
+	prs=$(printf '%s' "$raw" | jq '[.[] | {number, state: (.state | ascii_downcase), head: .headRefName}]' 2>/dev/null)
 fi
-[ -s "$prs" ] || echo "[]" > "$prs"
+[ -n "$prs" ] || prs='[]'
 
 if stat -c %Y / >/dev/null 2>&1; then
 	stat_fmt=(-c '%Y'); fmt_day() { date -d "@$1" '+%Y-%m-%d'; }
@@ -88,7 +87,7 @@ if [ -z "$history_command" ]; then
 	transcripts="$HOME/.cursor/projects/$slug/agent-transcripts"
 elif [ "${#worktrees[@]}" -gt 1 ]; then
 	if ! history=$("$history_command" "${worktrees[@]:1}") ||
-		! jq -es 'length == 1 and (.[0] | type == "object")' <<< "$history" >/dev/null 2>&1; then
+		! printf '%s' "$history" | jq -es 'length == 1 and (.[0] | type == "object")' >/dev/null 2>&1; then
 		echo "warn: worktree history unavailable; unknown worktrees require review" >&2
 		history='{}'
 	fi
@@ -126,19 +125,19 @@ for wt in "${worktrees[@]:1}"; do
 			|| remote="ahead$(git -C "$wt" rev-list --count "origin/$branch..HEAD" 2>/dev/null)"
 	else remote=no-remote; fi
 
-	pr=$([ -n "$branch" ] && jq -r --arg b "$branch" '
+	pr=$([ -n "$branch" ] && printf '%s' "$prs" | jq -r --arg b "$branch" '
 		map(select(.head == $b)) |
 		(map(select(.state == "open" or .state == "draft"))[0] // .[0]) |
-		select(. != null) | "#\(.number)/\(.state)"' "$prs" 2>/dev/null)
+		select(. != null) | "#\(.number)/\(.state)"' 2>/dev/null)
 	[ -z "$pr" ] && pr="-"
 
 	last_ts=0; pinned_or_active=false
 	if [ -n "$history_command" ]; then
 		IFS=$'\t' read -r last_ts pinned_or_active < <(
-			jq -r --arg wt "$wt" '
+			printf '%s' "$history" | jq -r --arg wt "$wt" '
 				.[$wt] | select(type == "object" or type == "null") |
 				[(.timestamp | if type == "number" and . > 0 and . == floor then . else 0 end), (.hold == true)] |
-				@tsv' <<< "$history"
+				@tsv'
 		)
 	elif [ -d "$transcripts" ]; then
 		# Match the full path and its delimiter so sibling names cannot collide.

@@ -99,12 +99,12 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     const output = execFileSync("bash", [relative(tmp, audit), "--history-command", relative(tmp, history), "-b", "HEAD", repo], {
       cwd: tmp,
       encoding: "utf8",
-      env: { ...env, PSTACK_AUDIT_UNSCOPED: unscoped },
+      env: { ...env, TMPDIR: join(tmp, "unavailable-temp"), PSTACK_AUDIT_UNSCOPED: unscoped },
       stdio: ["ignore", "pipe", "pipe"],
     });
     return new Map(output.trimEnd().split("\n").slice(2).map((line) => {
       const fields = line.split("\t");
-      return [fields[8], { lastChat: fields[6], bucket: fields[7] }];
+      return [fields[8], { pr: fields[5], lastChat: fields[6], bucket: fields[7] }];
     }));
   };
 
@@ -116,8 +116,9 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     assert.equal(rows.get(target)?.bucket, "verify-recent-chat");
   }
   assert.equal(rows.get(old)?.bucket, "safe");
-  assert.deepEqual(rows.get(absent), { lastChat: "unknown", bucket: "review-history-unknown" });
+  assert.deepEqual(rows.get(absent), { pr: "-", lastChat: "unknown", bucket: "review-history-unknown" });
   assert.equal(rows.get(closed)?.bucket, "review");
+  assert.equal(rows.get(closed)?.pr, "#4/closed");
   assert.equal(rows.get(untracked)?.bucket, "hold-untracked");
   assert.equal(rows.get(missing)?.bucket, "review-git-unknown");
 
