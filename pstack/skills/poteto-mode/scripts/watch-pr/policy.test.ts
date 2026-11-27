@@ -297,6 +297,65 @@ it("rechecks the new head when the review starts during a poll", async () => {
   expect(verdict).toMatchObject({ kind: "READY", terminal: true });
 });
 
+const readinessChanges = [
+  [
+    "draft",
+    { isDraft: true },
+    { kind: "BLOCKER", blocker: { reason: "draft-pr" } },
+  ],
+  [
+    "changes requested",
+    { reviewDecision: "CHANGES_REQUESTED" },
+    { kind: "BLOCKER", blocker: { reason: "changes-requested" } },
+  ],
+  [
+    "closed",
+    { state: "CLOSED" },
+    { kind: "BLOCKER", blocker: { reason: "closed-without-merge" } },
+  ],
+  [
+    "conflicts",
+    { mergeable: "CONFLICTING" },
+    { kind: "BLOCKER", blocker: { kind: "merge-conflicts" } },
+  ],
+  ["new base", { baseRefName: "release" }, { kind: "READY" }],
+] as const;
+
+it.each(readinessChanges)("rechecks %s changes at the same head before reporting READY", async (_name, facts, expected) => {
+  const original = fakeReader();
+  const changed = fakeReader({ facts });
+  let factReads = 0;
+  let now = 0;
+  const emitted: ProgressVerdict[] = [];
+  const reader: GitHubReader = {
+    ...original,
+    async pullRequest(pr) {
+      factReads += 1;
+      return (factReads === 1 ? original : changed).pullRequest(pr);
+    },
+  };
+  const verdict = await runSimple({
+    dependencies: {
+      reader,
+      clock: {
+        now: () => now,
+        observedAt: () => "2026-11-26T15:01:24Z",
+        async sleep(seconds) { now += seconds; },
+      },
+      emit: (event) => emitted.push(event),
+    },
+    contexts: [context(1)],
+    mode: "single",
+    statusOnly: false,
+    options,
+  });
+  expect(emitted).toMatchObject([
+    { kind: "RETRY", failure: { kind: "pr-facts-changed" } },
+  ]);
+  expect(factReads).toBeGreaterThanOrEqual(3);
+  expect(verdict).toMatchObject(expected);
+});
+
 describe("queued-stack cadence", () => {
   async function openSnapshot(pr: PrContext) {
     return readSnapshot({

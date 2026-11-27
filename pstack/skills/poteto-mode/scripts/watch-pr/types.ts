@@ -208,6 +208,11 @@ export type QueryFailure =
       readonly detail: string;
     }
   | {
+      readonly kind: "pr-facts-changed";
+      readonly retryable: true;
+      readonly detail: string;
+    }
+  | {
       readonly kind: "json-parse";
       readonly retryable: true;
       readonly detail: string;

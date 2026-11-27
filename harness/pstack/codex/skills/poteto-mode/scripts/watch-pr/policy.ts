@@ -485,6 +485,20 @@ export async function runSimple(args: {
             retryable: true,
             detail: `PR #${row.context.number} head changed while reading review and checks`,
           });
+        if (
+          current.state !== row.facts.state ||
+          current.isDraft !== row.facts.isDraft ||
+          current.reviewDecision !== row.facts.reviewDecision ||
+          current.mergeable !== row.facts.mergeable ||
+          current.mergeStateStatus !== row.facts.mergeStateStatus ||
+          current.headRefName !== row.facts.headRefName ||
+          current.baseRefName !== row.facts.baseRefName
+        )
+          throw new WatcherQueryError({
+            kind: "pr-facts-changed",
+            retryable: true,
+            detail: `PR #${row.context.number} merge or branch state changed while reading review and checks`,
+          });
       }
     }
     if (decision.kind === "ready" || decision.kind === "merged")
