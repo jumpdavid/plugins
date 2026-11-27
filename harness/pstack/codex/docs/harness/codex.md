@@ -220,7 +220,9 @@ Start triage for a new top-level report. To start reproduction from a reply, fil
 
 Use an operator-configured authenticated receiver bound to a saved Codex thread. Skip the Cursor routine, sender-key card, and tailnet setup steps. If the receiver or thread binding is missing, name the missing prerequisite and stop before wiring or exposing the UI.
 
-Send the declared JSON event from the UI backend. Keep the sender credential in the host's server-side credential store. The receiver authenticates, validates the payload against the declared actions and fields, and deduplicates by event ID. Use [durable follow-up](#durable-follow-up) to deliver the validated event as data to the receiver's configured thread.
+Send the declared JSON event from the UI backend. Keep the sender credential in the host's server-side credential store. The receiver authenticates, validates the payload against the declared actions and fields, and persists delivery state by its configured thread and event ID before delivery. On a replay, return the recorded state, including after a receiver restart.
+
+Use [durable follow-up](#durable-follow-up) to deliver the validated event as data to the configured thread. After restarting, continue accepted events that have yet to be submitted. If the enqueue result is uncertain, keep the event pending until the receiving host provides evidence that resolves delivery for that thread and event ID.
 
 Before reporting the connection live, send a harmless event. Verify that a new turn on the same thread completes with a result matching the event ID. An HTTP acceptance or enqueue receipt records delivery progress.
 
