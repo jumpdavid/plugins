@@ -2,6 +2,18 @@
 
 pstack skills use Cursor names. In Codex, apply the mappings below before following the shared skills and playbooks. Resolve skill-relative links from the physical `SKILL.md` path reported by discovery or `realpath`. A project link such as `.agents/skills/pstack` points to the installed `skills/` directory, so its logical path cannot locate sibling package files such as `docs/harness/codex.md`. Keep the task, scope, and checks from the original workflow.
 
+## Install
+
+For Babysit or Shipping on GitHub, prepare `watch-pr` from the plugin checkout in a terminal with write access and Bun on `PATH`. Run this for a fresh installation or after the watcher's package manifest or lockfile changes:
+
+```sh
+harness/pstack/codex/skills/poteto-mode/scripts/watch-pr/watch-pr --help
+```
+
+The launcher uses Bun to install the locked dependencies next to the watcher and prints its usage on success. Once prepared, a Codex session can start the watcher without write access to the installed skill.
+
+Link this checkout's `harness/pstack/codex/skills` directory to `.agents/skills/pstack` in the target project. Open the target project in Codex and invoke `$poteto-mode`.
+
 ## Tools
 
 | Cursor | Codex |
