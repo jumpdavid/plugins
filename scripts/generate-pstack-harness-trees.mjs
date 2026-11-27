@@ -86,17 +86,17 @@ function classify(skill) {
   }
   const text = readFileSync(join(dir, "SKILL.md"), "utf8");
   const wrap = usesCursorNames.size > 0 && /^# /m.test(text);
-  return { usesCursorNames, wrap };
+  const frontmatter = text.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
+  return { usesCursorNames, wrap, frontmatter };
 }
 
 const classes = new Map(skills.map((skill) => [skill, classify(skill)]));
 const problems = [];
 const users = new Map();
-for (const [skill, { usesCursorNames, wrap }] of classes) {
+for (const [skill, { usesCursorNames, wrap, frontmatter }] of classes) {
   if (usesCursorNames.size > 0 && !wrap) problems.push(`skills/${skill}/SKILL.md uses Cursor names but has no H1`);
   for (const key of usesCursorNames) users.set(key, [...(users.get(key) ?? []), skill]);
   // Cursor runs a skill by its folder name and Claude Code lists it by its frontmatter `name`, so the two must match. The Agent Skills spec limits both to SKILL_NAME.
-  const frontmatter = readFileSync(join(SKILLS, skill, "SKILL.md"), "utf8").match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
   const name = frontmatter.match(/^name:(.*)$/m)?.[1].trim().replace(/^(["'])(.*)\1$/, "$2");
   if (name !== skill) problems.push(`skills/${skill}/SKILL.md has name ${JSON.stringify(name ?? "")}, not its folder name ${skill}`);
   if (!SKILL_NAME.test(skill) || skill.length > 64) problems.push(`skills/${skill} is not lowercase words joined by hyphens, at most 64 characters`);
@@ -145,10 +145,17 @@ function render({ tree, name, assets, manifests, runtimeOnly = false }) {
   const line =
     `In ${name}, read [the ${name} adapter](../../${adapter}) once per session before you follow this skill. ` +
     `It maps the Cursor names in pstack skills to ${name}.` + adapterLocation;
-  for (const [skill, { wrap }] of classes) {
+  for (const [skill, { wrap, frontmatter }] of classes) {
     const path = `skills/${skill}/SKILL.md`;
     const text = files.get(path).bytes.toString("utf8");
     if (wrap) files.get(path).bytes = Buffer.from(text.replace(/^(# .*)\n+/m, `$1\n\n${line}\n\n`));
+    const policy = `skills/${skill}/agents/openai.yaml`;
+    if (tree === "codex" && !files.has(policy) && /^disable-model-invocation:[ \t]*true[ \t]*$/m.test(frontmatter)) {
+      files.set(policy, {
+        bytes: Buffer.from("policy:\n  allow_implicit_invocation: false\n"),
+        executable: false,
+      });
+    }
   }
   files.set("LICENSE", file(join(PSTACK, "LICENSE")));
   for (const manifest of manifests) files.set(manifest, file(join(PSTACK, "plugin.json")));
