@@ -41,6 +41,8 @@ Read the adapter and the selected playbook or skill phases first. For a direct i
 
 For an optional phase whose decision is complete, use `explanation` to record the skip and its reason when advancing the plan. If a required phase cannot run, leave its step incomplete and report the missing prerequisite.
 
+After resuming a thread, look for the most recent complete `update_plan` call in the restored conversation context. The history view may omit those updates. Before starting dependent work, submit the complete snapshot again with the same step labels, order, and statuses. Use a verified checkpoint when the restored context lacks the complete snapshot. If neither is available, report that the plan state is missing.
+
 For a direct call, use the following phases:
 
 | Skill | Plan |
