@@ -80,7 +80,7 @@ The review needs a sandbox that enforces read-only access. A native subagent can
 codex --ask-for-approval never exec --ephemeral --sandbox read-only -C "$checkout" "$brief"
 ```
 
-A trusted MCP launcher can offer these separate reviews to a standard CLI session. Limit the review runs to the MCP servers needed for the task, and use `enabled_tools` to select the allowed tools on each server.
+A trusted project can register a separate reviewer launcher in `.codex/config.toml`. Child CLI `mcp_servers` overrides merge with the loaded configuration. Disable the launcher and any other unused configured servers in the child. If the review needs neither plugin-provided servers nor app connectors, pass `--disable plugins --disable apps` to the child. Compare the enabled servers from `codex mcp list --json` with the intended allowlist using the child's feature and MCP overrides. Use `enabled_tools` to restrict the tools on each allowed server.
 
 When a review is read-only, give every reviewer the current checkout, including local changes. Keep repro writes in a disposable location when the scope permits them. If neither native nor externally launched delegates can enforce read-only access, report the missing coverage. For `how`, a direct read-only investigation can still answer the user. For `interrogate`, keep Fan out open and end the review.
 
