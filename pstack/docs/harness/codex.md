@@ -64,11 +64,13 @@ For `interrogate`, before completing Verify, record each retained finding with t
 | `environment: "cloud"` | Use a host-provided isolated environment or a separate [writable worktree](#independent-writers) when checkout isolation is the requirement. A local worktree needs a separate writable scope. |
 | `environment: "local"` | Use a native delegate in the current checkout when it has the required permissions. |
 | `cloud_base_branch` | Resolve the requested base to a commit and create the isolated worktree there. |
-| `run_in_background: true` | Omit the field. Wait for the terminal result through the available agent tool. |
+| `run_in_background: true` | Omit the field. Native agents run concurrently after dispatch. Start independent agents before waiting, and collect terminal results before work that depends on them. |
 | `resume` | Follow up with the same agent when the workflow depends on state it holds. Otherwise start a fresh agent with the previous evidence. |
 | `file_attachments` | Give the agent the paths in its brief. |
 
 Use fresh context for native delegates in an ephemeral Codex session. Set `fork_context` to false when the tool exposes it, and include the task and absolute file paths in the brief. If a spawn reports that the parent has no stored rollout, retry only the missing delegate with fresh context and preserve its sandbox policy.
+
+After a client disconnect, reconnect to the original running host before dispatching again. In App Server, use `thread/resume` with the stored parent thread ID and check the existing delegates' results. If another host reports an active writer, verify the original host's state before retrying. For a confirmed interruption, use [durable follow-up](#durable-follow-up) from the last verified checkpoint.
 
 ### Read-only delegation
 
